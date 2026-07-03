@@ -1,5 +1,5 @@
-import type { AnalysisResponse, AvatarSelection, FeatureKey } from "../types/face";
-import { featureLabels, featureOptions } from "../assetsRegistry/schema";
+import type { AnalysisResponse, AvatarFeatureKey, AvatarSelection } from "../types/face";
+import { featureLabels, labelForFeature } from "../assetsRegistry/schema";
 
 type Props = {
   analysis?: AnalysisResponse;
@@ -7,12 +7,8 @@ type Props = {
   currentSelection: AvatarSelection;
 };
 
-function labelFor(key: FeatureKey, value: string) {
-  return featureOptions[key].find((option) => option.value === value)?.label ?? value;
-}
-
 export function ReasonPanel({ analysis, aiSelection, currentSelection }: Props) {
-  const changed = (Object.keys(aiSelection) as FeatureKey[]).filter((key) => aiSelection[key] !== currentSelection[key]);
+  const changed = (Object.keys(aiSelection) as AvatarFeatureKey[]).filter((key) => aiSelection[key] !== currentSelection[key]);
 
   return (
     <section className="reason-panel">
@@ -23,7 +19,7 @@ export function ReasonPanel({ analysis, aiSelection, currentSelection }: Props) 
           <div className="reason-list">
             {analysis.reasons.slice(0, 6).map((item, index) => (
               <div className="reason-item" key={`${item.feature}-${index}`}>
-                <strong>{featureLabels[item.feature as FeatureKey] ?? item.feature}</strong>
+                <strong>{featureLabels[item.feature as AvatarFeatureKey] ?? item.feature}</strong>
                 <span>{item.value}</span>
                 <p>{item.reason}</p>
               </div>
@@ -35,7 +31,7 @@ export function ReasonPanel({ analysis, aiSelection, currentSelection }: Props) 
               <strong>手动调整</strong>
               {changed.map((key) => (
                 <p key={key}>
-                  {featureLabels[key]}：AI 推荐 {labelFor(key, aiSelection[key])}，当前选择 {labelFor(key, currentSelection[key])}
+                  {featureLabels[key]}：AI 推荐 {labelForFeature(key, aiSelection[key])}，当前选择 {labelForFeature(key, currentSelection[key])}
                 </p>
               ))}
             </div>

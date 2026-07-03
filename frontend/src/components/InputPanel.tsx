@@ -10,9 +10,21 @@ type Props = {
   onModeChange: (mode: InputMode) => void;
   onImageUpload: (file: File, dataUrl: string) => void;
   onChatSend: (message: string) => void;
+  onChatGenerate: () => void;
+  onChatReset: () => void;
 };
 
-export function InputPanel({ mode, imageDataUrl, messages, busy, onModeChange, onImageUpload, onChatSend }: Props) {
+export function InputPanel({
+  mode,
+  imageDataUrl,
+  messages,
+  busy,
+  onModeChange,
+  onImageUpload,
+  onChatSend,
+  onChatGenerate,
+  onChatReset
+}: Props) {
   return (
     <section className="panel input-panel">
       <div className="tabs" role="tablist">
@@ -26,7 +38,14 @@ export function InputPanel({ mode, imageDataUrl, messages, busy, onModeChange, o
       {mode === "image" ? (
         <ImageUpload imageDataUrl={imageDataUrl} busy={busy} onUpload={onImageUpload} />
       ) : (
-        <ChatInput messages={messages} busy={busy} onSend={onChatSend} />
+        <ChatInput
+          messages={messages}
+          busy={busy}
+          canGenerate={messages.some((message) => message.role === "user")}
+          onSend={onChatSend}
+          onGenerate={onChatGenerate}
+          onReset={onChatReset}
+        />
       )}
     </section>
   );

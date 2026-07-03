@@ -19,7 +19,7 @@ export function ImageUpload({ imageDataUrl, busy, onUpload }: Props) {
   }
 
   return (
-    <div className="upload-panel">
+    <div className={`upload-panel ${imageDataUrl ? "has-image" : ""}`}>
       <label className="upload-target">
         <Upload size={24} />
         <span>{busy ? "分析中..." : "上传人像图片"}</span>

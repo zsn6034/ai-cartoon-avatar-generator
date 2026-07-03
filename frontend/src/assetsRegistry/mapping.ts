@@ -1,7 +1,7 @@
-import type { AvatarSelection, PartialFaceFeatures } from "../types/face";
+import type { AvatarSelection, PartialAvatarFeatures } from "../types/face";
 import { defaultFeatures } from "./schema";
 
-export function mapFeaturesToSelection(features: PartialFaceFeatures): AvatarSelection {
+export function completeFeatures(features: PartialAvatarFeatures): AvatarSelection {
   return {
     ...defaultFeatures,
     ...features

@@ -1,14 +1,12 @@
-import type { AvatarSelection, FeatureKey } from "../types/face";
-import { featureLabels, featureOptions } from "../assetsRegistry/schema";
+import type { AvatarFeatureKey, AvatarSelection } from "../types/face";
+import { featureKeys, featureLabels, featureOptions } from "../assetsRegistry/schema";
 
 type Props = {
   value: AvatarSelection;
   aiValue: AvatarSelection;
-  confidence: Partial<Record<FeatureKey, number>>;
+  confidence: Partial<Record<AvatarFeatureKey, number>>;
   onChange: (next: AvatarSelection) => void;
 };
-
-const featureKeys = Object.keys(featureLabels) as FeatureKey[];
 
 export function FeatureEditor({ value, aiValue, confidence, onChange }: Props) {
   return (
@@ -23,6 +21,7 @@ export function FeatureEditor({ value, aiValue, confidence, onChange }: Props) {
                 {featureLabels[key]}
                 <small>{Math.round((confidence[key] ?? 0.5) * 100)}%</small>
               </span>
+              {(key === "hairColor" || key === "skinColor") && <i className="color-swatch" style={{ background: value[key] }} />}
               <select
                 value={value[key]}
                 onChange={(event) => onChange({ ...value, [key]: event.target.value } as AvatarSelection)}

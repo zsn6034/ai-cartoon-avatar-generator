@@ -1,4 +1,4 @@
-import type { AnalysisResponse, ChatMessage, PartialFaceFeatures, ProviderId } from "../types/face";
+import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, ProviderId } from "../types/face";
 
 export async function getProviders() {
   const response = await fetch("/api/providers");
@@ -21,22 +21,34 @@ export async function analyzeImage(provider: ProviderId, file: File): Promise<An
   return response.json();
 }
 
-export async function analyzeChat(
+export async function rememberChat(
   provider: ProviderId,
   messages: ChatMessage[],
-  currentFeatures: PartialFaceFeatures,
-  roundIndex: number
-): Promise<AnalysisResponse> {
-  const response = await fetch("/api/analyze/chat", {
+  currentMemory: ChatMemory
+): Promise<ChatRememberResponse> {
+  const response = await fetch("/api/chat/remember", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       provider,
       messages,
-      current_features: currentFeatures,
-      round_index: roundIndex
+      current_memory: currentMemory
     })
   });
-  if (!response.ok) throw new Error("聊天分析失败");
+  if (!response.ok) throw new Error("对话记忆更新失败");
+  return response.json();
+}
+
+export async function generateFromChat(provider: ProviderId, messages: ChatMessage[], chatMemory: ChatMemory): Promise<AnalysisResponse> {
+  const response = await fetch("/api/chat/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider,
+      messages,
+      chat_memory: chatMemory
+    })
+  });
+  if (!response.ok) throw new Error("头像生成失败");
   return response.json();
 }

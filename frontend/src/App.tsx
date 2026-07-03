@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
-import { analyzeChat, analyzeImage, getProviders } from "./api/faceAnalysis";
-import { defaultFeatures } from "./assetsRegistry/schema";
-import { mapFeaturesToSelection } from "./assetsRegistry/mapping";
+import { RotateCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { analyzeImage, generateFromChat, getProviders, rememberChat } from "./api/faceAnalysis";
+import { defaultChatMemory, defaultFeatures } from "./assetsRegistry/schema";
+import { completeFeatures } from "./assetsRegistry/mapping";
 import { FeatureEditor } from "./components/FeatureEditor";
+import { GenerationHistory } from "./components/GenerationHistory";
 import { InputPanel } from "./components/InputPanel";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { ProviderSelect } from "./components/ProviderSelect";
 import { ReasonPanel } from "./components/ReasonPanel";
-import { loadDraft, saveDraft } from "./storage/avatarDraftDb";
-import type { AnalysisResponse, AvatarSelection, ChatMessage, InputMode, PartialFaceFeatures, ProviderId } from "./types/face";
+import { addGenerationRecord, listGenerationRecords } from "./storage/avatarDraftDb";
+import type { AnalysisResponse, AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, ProviderId } from "./types/face";
 
 const defaultProviders = [
   { id: "qwen" as ProviderId, label: "Qwen", model: "qwen-vl-plus", configured: false },
@@ -16,107 +18,253 @@ const defaultProviders = [
 ];
 
 export default function App() {
-  const [provider, setProvider] = useState<ProviderId>("qwen");
+  const [provider, setProvider] = useState<ProviderId | undefined>();
   const [providers, setProviders] = useState(defaultProviders);
   const [mode, setMode] = useState<InputMode>("image");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [features, setFeatures] = useState<PartialFaceFeatures>(defaultFeatures);
+  const [chatMemory, setChatMemory] = useState<ChatMemory>(defaultChatMemory);
   const [analysis, setAnalysis] = useState<AnalysisResponse | undefined>();
-  const [aiSelection, setAiSelection] = useState<AvatarSelection>(defaultFeatures);
+  const [generatedSelection, setGeneratedSelection] = useState<AvatarSelection>(defaultFeatures);
   const [currentSelection, setCurrentSelection] = useState<AvatarSelection>(defaultFeatures);
+  const [generationRecords, setGenerationRecords] = useState<GenerationRecord[]>([]);
   const [busy, setBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const operationIdRef = useRef(0);
 
   useEffect(() => {
-    getProviders()
-      .then((result) => {
-        setProviders(result.providers);
-        setProvider(result.default_provider);
-      })
-      .catch(() => undefined);
-    loadDraft()
-      .then((draft) => {
-        if (!draft) return;
-        setProvider(draft.provider);
-        setMode(draft.inputMode);
-        setImageDataUrl(draft.imageDataUrl);
-        setMessages(draft.chatMessages);
-        setFeatures(draft.features);
-        setAiSelection(draft.aiRecommendedSelection);
-        setCurrentSelection(draft.currentSelection);
-        setAnalysis(draft.analysis);
-      })
-      .catch(() => undefined);
+    let cancelled = false;
+
+    async function initialize() {
+      const [providerResult, recordsResult] = await Promise.allSettled([getProviders(), listGenerationRecords()]);
+      if (cancelled) return;
+
+      let nextProvider: ProviderId = "qwen";
+      if (providerResult.status === "fulfilled") {
+        setProviders(providerResult.value.providers);
+        nextProvider = providerResult.value.default_provider;
+      }
+
+      if (recordsResult.status === "fulfilled") {
+        setGenerationRecords(recordsResult.value);
+      }
+
+      setProvider(nextProvider);
+    }
+
+    initialize().catch(() => {
+      if (cancelled) return;
+      setProvider("qwen");
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    saveDraft({
-      inputMode: mode,
-      chatMessages: messages,
-      imageDataUrl,
-      features,
-      aiRecommendedSelection: aiSelection,
-      currentSelection,
-      analysis,
-      provider,
-      updatedAt: new Date().toISOString()
-    }).catch(() => undefined);
-  }, [mode, messages, imageDataUrl, features, aiSelection, currentSelection, analysis, provider]);
+  function beginOperation() {
+    operationIdRef.current += 1;
+    return operationIdRef.current;
+  }
+
+  function isCurrentOperation(operationId: number) {
+    return operationIdRef.current === operationId;
+  }
+
+  function createRecordId() {
+    return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
 
   function applyAnalysis(result: AnalysisResponse) {
-    const nextFeatures = { ...features, ...result.features };
-    const nextSelection = mapFeaturesToSelection(nextFeatures);
-    setFeatures(nextFeatures);
+    const nextSelection = completeFeatures(result.features);
     setAnalysis(result);
-    setAiSelection(nextSelection);
+    setGeneratedSelection(nextSelection);
     setCurrentSelection(nextSelection);
+    return nextSelection;
+  }
+
+  async function persistGenerationRecord(record: GenerationRecord) {
+    setGenerationRecords((records) => [record, ...records.filter((item) => item.id !== record.id)]);
+    try {
+      await addGenerationRecord(record);
+    } catch (caught) {
+      setError(caught instanceof Error ? `生成成功，但记录保存失败：${caught.message}` : "生成成功，但记录保存失败");
+    }
+  }
+
+  function createGenerationRecord(
+    result: AnalysisResponse,
+    selection: AvatarSelection,
+    options: {
+      sourceMode: InputMode;
+      uploadedImageDataUrl?: string;
+      messages?: ChatMessage[];
+      chatMemory?: ChatMemory;
+    }
+  ): GenerationRecord {
+    return {
+      id: createRecordId(),
+      createdAt: new Date().toISOString(),
+      sourceMode: options.sourceMode,
+      provider: result.provider,
+      uploadedImageDataUrl: options.uploadedImageDataUrl,
+      messages: options.messages,
+      chatMemory: options.chatMemory,
+      features: result.features,
+      generatedSelection: selection,
+      currentSelection: selection,
+      analysis: result
+    };
   }
 
   async function handleImageUpload(file: File, dataUrl: string) {
+    if (!provider) {
+      setError("Provider 尚未加载完成");
+      return;
+    }
+    const operationId = beginOperation();
     setBusy(true);
+    setPreviewBusy(true);
     setError(undefined);
     setMode("image");
     setImageDataUrl(dataUrl);
     try {
       const result = await analyzeImage(provider, file);
-      applyAnalysis(result);
+      if (!isCurrentOperation(operationId)) return;
+      const selection = applyAnalysis(result);
+      await persistGenerationRecord(
+        createGenerationRecord(result, selection, {
+          sourceMode: "image",
+          uploadedImageDataUrl: dataUrl
+        })
+      );
     } catch (caught) {
+      if (!isCurrentOperation(operationId)) return;
       setError(caught instanceof Error ? caught.message : "图片分析失败");
-      const fallback = mapFeaturesToSelection(defaultFeatures);
-      setAiSelection(fallback);
+      const fallback = completeFeatures(defaultFeatures);
+      setAnalysis(undefined);
+      setGeneratedSelection(fallback);
       setCurrentSelection(fallback);
     } finally {
-      setBusy(false);
+      if (isCurrentOperation(operationId)) {
+        setPreviewBusy(false);
+        setBusy(false);
+      }
     }
   }
 
   async function handleChatSend(message: string) {
+    if (!provider) {
+      setError("Provider 尚未加载完成");
+      return;
+    }
+    const operationId = beginOperation();
     setBusy(true);
     setError(undefined);
     setMode("chat");
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: message }];
-    const nextRoundIndex = Math.min(3, nextMessages.filter((item) => item.role === "user").length);
     setMessages(nextMessages);
     try {
-      const result = await analyzeChat(provider, nextMessages, features, nextRoundIndex);
+      const result = await rememberChat(provider, nextMessages, chatMemory);
+      if (!isCurrentOperation(operationId)) return;
       setMessages([...nextMessages, { role: "assistant", content: result.assistant_message }]);
-      applyAnalysis(result);
+      setChatMemory(result.chat_memory);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "聊天分析失败");
+      if (!isCurrentOperation(operationId)) return;
+      setError(caught instanceof Error ? caught.message : "对话记忆更新失败");
     } finally {
-      setBusy(false);
+      if (isCurrentOperation(operationId)) {
+        setBusy(false);
+      }
     }
   }
+
+  async function handleChatGenerate() {
+    if (!messages.some((message) => message.role === "user")) return;
+    if (!provider) {
+      setError("Provider 尚未加载完成");
+      return;
+    }
+    const operationId = beginOperation();
+    setBusy(true);
+    setPreviewBusy(true);
+    setError(undefined);
+    setMode("chat");
+    try {
+      const result = await generateFromChat(provider, messages, chatMemory);
+      if (!isCurrentOperation(operationId)) return;
+      const nextMessages: ChatMessage[] = [...messages, { role: "assistant", content: result.assistant_message }];
+      setMessages(nextMessages);
+      const selection = applyAnalysis(result);
+      await persistGenerationRecord(
+        createGenerationRecord(result, selection, {
+          sourceMode: "chat",
+          messages: nextMessages,
+          chatMemory
+        })
+      );
+    } catch (caught) {
+      if (!isCurrentOperation(operationId)) return;
+      setError(caught instanceof Error ? caught.message : "头像生成失败");
+    } finally {
+      if (isCurrentOperation(operationId)) {
+        setPreviewBusy(false);
+        setBusy(false);
+      }
+    }
+  }
+
+  function handleWorkspaceReset() {
+    beginOperation();
+    setMode("image");
+    setImageDataUrl(undefined);
+    setMessages([]);
+    setChatMemory(defaultChatMemory);
+    setAnalysis(undefined);
+    setGeneratedSelection(defaultFeatures);
+    setCurrentSelection(defaultFeatures);
+    setError(undefined);
+    setBusy(false);
+    setPreviewBusy(false);
+  }
+
+  function handleRecordSelect(record: GenerationRecord) {
+    beginOperation();
+    setMode(record.sourceMode);
+    if (record.sourceMode === "image") {
+      setImageDataUrl(record.uploadedImageDataUrl);
+      setMessages([]);
+      setChatMemory(defaultChatMemory);
+    } else {
+      setImageDataUrl(undefined);
+      setMessages(record.messages ?? []);
+      setChatMemory(record.chatMemory ?? defaultChatMemory);
+    }
+    setAnalysis(record.analysis);
+    setGeneratedSelection(record.generatedSelection);
+    setCurrentSelection(record.currentSelection);
+    setError(undefined);
+    setBusy(false);
+    setPreviewBusy(false);
+  }
+
+  const previewLoadingLabel = mode === "image" ? "分析图片中..." : "生成头像中...";
 
   return (
     <main className="app-shell">
       <header className="app-header">
         <div>
           <h1>AI 卡通头像生成器</h1>
-          <p>从照片或自由描述提取脸部特征，用可解释规则组合 2D canvas 头像。</p>
+          <p>从照片或自由描述生成 DiceBear Adventurer 风格的 SVG 部件头像。</p>
         </div>
-        <ProviderSelect value={provider} providers={providers} onChange={setProvider} />
+        <div className="header-controls">
+          <button className="workspace-reset" type="button" onClick={handleWorkspaceReset} title="重置当前工作区">
+            <RotateCcw size={17} />
+            重置
+          </button>
+          <ProviderSelect value={provider} providers={providers} onChange={setProvider} />
+        </div>
       </header>
 
       {error && <div className="error-banner">{error}</div>}
@@ -130,11 +278,14 @@ export default function App() {
           onModeChange={setMode}
           onImageUpload={handleImageUpload}
           onChatSend={handleChatSend}
+          onChatGenerate={handleChatGenerate}
+          onChatReset={handleWorkspaceReset}
         />
-        <PreviewPanel avatar={currentSelection} />
+        <PreviewPanel avatar={currentSelection} loading={previewBusy} loadingLabel={previewLoadingLabel} />
         <aside className="panel inspector">
-          <FeatureEditor value={currentSelection} aiValue={aiSelection} confidence={analysis?.confidence ?? {}} onChange={setCurrentSelection} />
-          <ReasonPanel analysis={analysis} aiSelection={aiSelection} currentSelection={currentSelection} />
+          <GenerationHistory records={generationRecords} onSelect={handleRecordSelect} />
+          <FeatureEditor value={currentSelection} aiValue={generatedSelection} confidence={analysis?.confidence ?? {}} onChange={setCurrentSelection} />
+          <ReasonPanel analysis={analysis} aiSelection={generatedSelection} currentSelection={currentSelection} />
         </aside>
       </div>
     </main>
