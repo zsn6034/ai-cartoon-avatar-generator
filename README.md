@@ -1,6 +1,6 @@
 # AI 卡通头像生成器
 
-一个前后端分离的头像生成 MVP：上传图片或通过多轮自由对话描述外貌，由后端调用 Qwen / 豆包生成 DiceBear Adventurer 原生头像参数，前端使用本地 Adventurer JSON 资产组合 SVG 头像，并支持手动微调。
+一个前后端分离的头像生成 MVP：上传图片或通过多轮自由对话描述外貌，由后端按前端传入的 LLM 配置调用 OpenAI-compatible 模型生成 DiceBear Adventurer 原生头像参数，前端使用本地 Adventurer JSON 资产组合 SVG 头像，并支持手动微调。
 
 ## 核心功能
 
@@ -9,7 +9,7 @@
 - **多轮自由对话**：用户可以连续补充描述。发送消息只更新本轮会话记忆，不会自动更新头像预览。
 - **显式生成头像**：点击“生成头像”时才调用 LLM，把当前 `messages + chatMemory` 转换为完整 Adventurer 参数并更新预览、编辑器和原因面板。
 - **本地会话记忆**：`/api/chat/remember` 只在服务端本地合并用户描述，不触发 LLM 调用；真正的模型调用只发生在图片分析和点击生成头像时。
-- **Provider 默认值来自后端**：前端启动后读取 `/api/providers` 的 `default_provider`，旧 draft 中保存的 provider 不会覆盖 `.env` 的默认配置。
+- **前端 LLM 配置**：前端支持在弹窗里配置 provider、model、apiKey、baseUrl，并保存到浏览器本地；后端按每次请求传入的配置调用模型。
 - **服务端可观测日志**：后端记录 API 请求耗时、Provider fallback、LLM request 摘要、原始响应内容和 JSON 解析结果，便于排查模型调用问题。
 
 > Adventurer 头像素材来自 DiceBear Adventurer 风格。正式发布时请补充 DiceBear / Adventurer 的 CC BY 4.0 attribution。
@@ -32,7 +32,7 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-`.env` 中可以配置：
+`.env` 中可以配置可选的 provider 预设默认值：
 
 ```env
 QWEN_API_KEY=
@@ -47,7 +47,7 @@ DEFAULT_PROVIDER=doubao
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-没有配置 API Key 时，后端会返回本地 fallback Adventurer 参数，前端仍可完整演示流程。
+实际模型调用以浏览器里保存的 LLM 配置为准。API Key 不会从 `.env` 自动注入前端；未配置前端 API Key 时，前端会提示先完成 LLM 配置。模型请求失败时，后端会返回本地 fallback Adventurer 参数，前端仍可完整演示流程。
 
 ## 前端启动
 
@@ -62,14 +62,14 @@ pnpm --filter ai-cartoon-avatar-generator dev
 
 - `GET /api/health`
 - `GET /api/providers`
-  - 返回可用 provider、模型名、配置状态和 `default_provider`。
+  - 返回前端配置面板可用的 provider 预设、模型名、baseUrl 和 `default_provider`。
 - `POST /api/analyze/image`
-  - 上传图片后直接调用模型，返回完整 Adventurer `features`。
+  - FormData 输入 `llm_config` JSON 字符串和 `image`，上传图片后直接调用模型，返回完整 Adventurer `features`。
 - `POST /api/chat/remember`
-  - 输入 `provider`、`messages`、`current_memory`。
+  - 输入 `llm_config`、`messages`、`current_memory`。
   - 只做本地会话记忆合并，不调用 LLM。
 - `POST /api/chat/generate`
-  - 输入 `provider`、`messages`、`chat_memory`。
+  - 输入 `llm_config`、`messages`、`chat_memory`。
   - 调用模型生成完整 Adventurer `features`。
 
 图片上传限制为 5MB。后端只在内存中读取图片，不落盘。
@@ -83,9 +83,16 @@ pnpm --filter ai-cartoon-avatar-generator dev
 5. 后端根据会话记忆和中文语义映射提示生成 Adventurer 原生参数。
 6. 前端更新 SVG 预览、特征编辑器和原因面板。
 
-## Draft 持久化
+## 本地持久化
 
-前端使用 IndexedDB 保存 `schemaVersion: 2` 草稿：
+前端使用 `localStorage` 保存 LLM 配置：
+
+- `provider`
+- `model`
+- `apiKey`
+- `baseUrl`
+
+前端使用 IndexedDB 保存 `schemaVersion: 2` 生成记录：
 
 - `messages`
 - `chatMemory`
@@ -94,7 +101,7 @@ pnpm --filter ai-cartoon-avatar-generator dev
 - `analysis`
 - `provider`
 
-旧 draft 会自动升级：保留聊天记录和 provider，旧语义特征会丢弃并回到默认 Adventurer 配置。
+旧记录会继续兼容：保留聊天记录和 provider 字符串，旧语义特征会丢弃并回到默认 Adventurer 配置。
 
 ## 验证命令
 
@@ -104,7 +111,7 @@ cd frontend
 ./node_modules/.bin/vite build
 
 cd ..
-python3 -m py_compile backend/app/schemas/face.py backend/app/providers/base.py backend/app/main.py
+PYTHONPYCACHEPREFIX=/private/tmp/pycache-codex python3 -m py_compile backend/app/schemas/face.py backend/app/providers/base.py backend/app/services/provider_factory.py backend/app/main.py
 ```
 
 ## 当前边界

@@ -1,17 +1,26 @@
-import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, ProviderId } from "../types/face";
+import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, LLMConfig } from "../types/face";
 
 export async function getProviders() {
   const response = await fetch("/api/providers");
   if (!response.ok) throw new Error("无法获取 Provider 列表");
   return response.json() as Promise<{
-    default_provider: ProviderId;
-    providers: Array<{ id: ProviderId; label: string; model: string; configured: boolean }>;
+    default_provider: string;
+    providers: Array<{ id: string; label: string; model: string; base_url: string; configured: boolean }>;
   }>;
 }
 
-export async function analyzeImage(provider: ProviderId, file: File): Promise<AnalysisResponse> {
+function toServerConfig(config: LLMConfig) {
+  return {
+    provider: config.provider,
+    model: config.model,
+    api_key: config.apiKey,
+    base_url: config.baseUrl
+  };
+}
+
+export async function analyzeImage(llmConfig: LLMConfig, file: File): Promise<AnalysisResponse> {
   const body = new FormData();
-  body.append("provider", provider);
+  body.append("llm_config", JSON.stringify(toServerConfig(llmConfig)));
   body.append("image", file);
   const response = await fetch("/api/analyze/image", { method: "POST", body });
   if (!response.ok) {
@@ -22,7 +31,7 @@ export async function analyzeImage(provider: ProviderId, file: File): Promise<An
 }
 
 export async function rememberChat(
-  provider: ProviderId,
+  llmConfig: LLMConfig,
   messages: ChatMessage[],
   currentMemory: ChatMemory
 ): Promise<ChatRememberResponse> {
@@ -30,7 +39,7 @@ export async function rememberChat(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      provider,
+      llm_config: toServerConfig(llmConfig),
       messages,
       current_memory: currentMemory
     })
@@ -39,12 +48,12 @@ export async function rememberChat(
   return response.json();
 }
 
-export async function generateFromChat(provider: ProviderId, messages: ChatMessage[], chatMemory: ChatMemory): Promise<AnalysisResponse> {
+export async function generateFromChat(llmConfig: LLMConfig, messages: ChatMessage[], chatMemory: ChatMemory): Promise<AnalysisResponse> {
   const response = await fetch("/api/chat/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      provider,
+      llm_config: toServerConfig(llmConfig),
       messages,
       chat_memory: chatMemory
     })

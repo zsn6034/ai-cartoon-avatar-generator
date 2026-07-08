@@ -1,4 +1,4 @@
-import type { AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, ProviderId } from "../types/face";
+import type { AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode } from "../types/face";
 
 const DB_NAME = "ai-cartoon-avatar";
 const DB_VERSION = 2;
@@ -20,10 +20,6 @@ function openDb(): Promise<IDBDatabase> {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-}
-
-function isProviderId(value: unknown): value is ProviderId {
-  return value === "qwen" || value === "doubao";
 }
 
 function isSourceMode(value: unknown): value is InputMode {
@@ -75,7 +71,7 @@ function normalizeRecord(raw: unknown): GenerationRecord | undefined {
     typeof record.id !== "string" ||
     typeof record.createdAt !== "string" ||
     !isSourceMode(record.sourceMode) ||
-    !isProviderId(record.provider) ||
+    typeof record.provider !== "string" ||
     !isAvatarSelection(record.features) ||
     !isAvatarSelection(record.generatedSelection) ||
     !isAvatarSelection(record.currentSelection) ||

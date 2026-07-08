@@ -3,7 +3,7 @@ import logging
 import re
 import time
 from abc import ABC
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -15,6 +15,7 @@ from app.schemas.face import (
     DEFAULT_FEATURES,
     FEATURE_KEYS,
     FeatureReason,
+    LLMConfig,
     PartialAvatarFeatures,
 )
 
@@ -120,10 +121,11 @@ def _summarize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 class BaseProvider(ABC):
     name: str
 
-    def __init__(self, api_key: str, base_url: str, model: str):
-        self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
-        self.model = model
+    def __init__(self, config: LLMConfig):
+        self.name = config.provider.strip() or self.name
+        self.api_key = config.api_key
+        self.base_url = config.base_url.rstrip("/")
+        self.model = config.model
 
     @property
     def configured(self) -> bool:
@@ -335,7 +337,7 @@ class BaseProvider(ABC):
             reasons=reasons,
             missing_fields=[],
             defaults_applied=defaults_applied,
-            provider=self.name,  # type: ignore[arg-type]
+            provider=self.name,
         )
 
     def _normalize_reasons(self, raw_reasons: Any, features: Dict[str, str], fallback_reason: str) -> List[FeatureReason]:
@@ -356,7 +358,7 @@ class BaseProvider(ABC):
 
         return [FeatureReason(feature=key, value=str(value), reason=fallback_reason) for key, value in features.items()]
 
-    def _recent_user_notes(self, messages: List[Dict[str, str]] | None) -> List[str]:
+    def _recent_user_notes(self, messages: Optional[List[Dict[str, str]]]) -> List[str]:
         notes: List[str] = []
         for item in messages or []:
             if item.get("role") != "user":
@@ -366,13 +368,13 @@ class BaseProvider(ABC):
                 notes.append(text[:160])
         return notes[-6:]
 
-    def _merged_user_notes(self, memory: ChatMemory, messages: List[Dict[str, str]] | None) -> List[str]:
+    def _merged_user_notes(self, memory: ChatMemory, messages: Optional[List[Dict[str, str]]]) -> List[str]:
         notes = [str(item) for item in memory.notes if str(item).strip()]
         notes.extend(self._recent_user_notes(messages))
         return list(dict.fromkeys(notes))[-12:]
 
     def _remember_locally(
-        self, current_memory: ChatMemory, messages: List[Dict[str, str]] | None = None
+        self, current_memory: ChatMemory, messages: Optional[List[Dict[str, str]]] = None
     ) -> ChatRememberResponse:
         known = current_memory.known_features.model_dump(exclude_none=True)
         notes = self._merged_user_notes(current_memory, messages)
@@ -387,10 +389,10 @@ class BaseProvider(ABC):
                 FeatureReason(feature=key, value=str(value), reason="已保留本轮对话记忆。")
                 for key, value in known.items()
             ],
-            provider=self.name,  # type: ignore[arg-type]
+            provider=self.name,
         )
 
-    def _fallback_analysis(self, reason: str, known_features: PartialAvatarFeatures | None = None) -> AnalysisResponse:
+    def _fallback_analysis(self, reason: str, known_features: Optional[PartialAvatarFeatures] = None) -> AnalysisResponse:
         features = DEFAULT_FEATURES.model_dump()
         known = known_features.model_dump(exclude_none=True) if known_features else {}
         features.update(self._clean_features(known))
@@ -404,5 +406,5 @@ class BaseProvider(ABC):
             reasons=[FeatureReason(feature=key, value=str(value), reason=reason) for key, value in features.items()],
             missing_fields=[],
             defaults_applied=defaults_applied,
-            provider=self.name,  # type: ignore[arg-type]
+            provider=self.name,
         )

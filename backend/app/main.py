@@ -1,11 +1,13 @@
+import json
 import logging
 import time
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.schemas.face import AnalysisResponse, ChatGenerateRequest, ChatRememberRequest, ChatRememberResponse
+from app.schemas.face import AnalysisResponse, ChatGenerateRequest, ChatRememberRequest, ChatRememberResponse, LLMConfig
 from app.services.image_analysis import image_to_data_url
 from app.services.provider_factory import get_provider, list_providers
 
@@ -75,20 +77,27 @@ async def providers():
 
 
 @app.post("/api/analyze/image", response_model=AnalysisResponse)
-async def analyze_image(provider: str = Form(...), image: UploadFile = File(...)):
+async def analyze_image(llm_config: str = Form(...), image: UploadFile = File(...)):
+    try:
+        config = LLMConfig.model_validate(json.loads(llm_config))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid llm_config") from exc
+
     logger.info(
-        "[api.image] request provider=%s filename=%s content_type=%s size=%s",
-        provider,
+        "[api.image] request provider=%s model=%s base_url=%s filename=%s content_type=%s size=%s",
+        config.provider,
+        config.model,
+        config.base_url,
         image.filename,
         image.content_type,
         getattr(image, "size", None),
     )
-    selected_provider = get_provider(provider)
+    selected_provider = get_provider(config)
     data_url = await image_to_data_url(image)
     result = await selected_provider.analyze_image(data_url)
     logger.info(
         "[api.image] response provider=%s status=%s features=%s defaults_applied=%s",
-        provider,
+        config.provider,
         result.status,
         result.features.model_dump(),
         result.defaults_applied,
@@ -98,12 +107,14 @@ async def analyze_image(provider: str = Form(...), image: UploadFile = File(...)
 
 @app.post("/api/chat/remember", response_model=ChatRememberResponse, response_model_exclude_none=True)
 async def remember_chat(request: ChatRememberRequest):
-    selected_provider = get_provider(request.provider)
+    selected_provider = get_provider(request.llm_config)
     messages = [message.model_dump() for message in request.messages]
     current_memory = request.current_memory.model_dump(exclude_none=True)
     logger.info(
-        "[api.remember] request provider=%s messages=%d current_summary=%r current_notes=%d",
-        request.provider,
+        "[api.remember] request provider=%s model=%s base_url=%s messages=%d current_summary=%r current_notes=%d",
+        request.llm_config.provider,
+        request.llm_config.model,
+        request.llm_config.base_url,
         len(messages),
         current_memory.get("summary", ""),
         len(current_memory.get("notes", [])),
@@ -114,7 +125,7 @@ async def remember_chat(request: ChatRememberRequest):
     )
     logger.info(
         "[api.remember] response provider=%s summary=%r notes=%d known_features=%s",
-        request.provider,
+        request.llm_config.provider,
         result.chat_memory.summary,
         len(result.chat_memory.notes),
         result.chat_memory.known_features.model_dump(exclude_none=True),
@@ -124,12 +135,14 @@ async def remember_chat(request: ChatRememberRequest):
 
 @app.post("/api/chat/generate", response_model=AnalysisResponse)
 async def generate_chat(request: ChatGenerateRequest):
-    selected_provider = get_provider(request.provider)
+    selected_provider = get_provider(request.llm_config)
     messages = [message.model_dump() for message in request.messages]
     chat_memory = request.chat_memory.model_dump(exclude_none=True)
     logger.info(
-        "[api.generate] request provider=%s messages=%d memory_summary=%r memory_notes=%d",
-        request.provider,
+        "[api.generate] request provider=%s model=%s base_url=%s messages=%d memory_summary=%r memory_notes=%d",
+        request.llm_config.provider,
+        request.llm_config.model,
+        request.llm_config.base_url,
         len(messages),
         chat_memory.get("summary", ""),
         len(chat_memory.get("notes", [])),
@@ -140,7 +153,7 @@ async def generate_chat(request: ChatGenerateRequest):
     )
     logger.info(
         "[api.generate] response provider=%s status=%s features=%s defaults_applied=%s",
-        request.provider,
+        request.llm_config.provider,
         result.status,
         result.features.model_dump(),
         result.defaults_applied,

@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { analyzeImage, generateFromChat, getProviders, rememberChat } from "./api/faceAnalysis";
 import { defaultChatMemory, defaultFeatures } from "./assetsRegistry/schema";
@@ -6,24 +6,75 @@ import { completeFeatures } from "./assetsRegistry/mapping";
 import { FeatureEditor } from "./components/FeatureEditor";
 import { GenerationHistory } from "./components/GenerationHistory";
 import { InputPanel } from "./components/InputPanel";
+import { LLMConfigPanel } from "./components/LLMConfigPanel";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { ProviderSelect } from "./components/ProviderSelect";
 import { ReasonPanel } from "./components/ReasonPanel";
 import { addGenerationRecord, deleteGenerationRecord, listGenerationRecords } from "./storage/avatarDraftDb";
-import type { AnalysisResponse, AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, ProviderId } from "./types/face";
+import type { AnalysisResponse, AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, LLMConfig, ProviderPreset } from "./types/face";
 
-const defaultProviders = [
-  { id: "qwen" as ProviderId, label: "Qwen", model: "qwen-vl-plus", configured: false },
-  { id: "doubao" as ProviderId, label: "Doubao", model: "doubao", configured: false }
+const LLM_CONFIG_STORAGE_KEY = "ai-cartoon-avatar.llm-config";
+
+const defaultProviders: ProviderPreset[] = [
+  { id: "qwen", label: "Qwen", model: "qwen-vl-plus", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", configured: false },
+  { id: "doubao", label: "Doubao", model: "doubao-1-5-vision-pro-32k-250115", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", configured: false },
+  { id: "openai", label: "OpenAI", model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1", configured: false },
+  { id: "custom", label: "Custom", model: "", baseUrl: "", configured: false }
 ];
 
 function sortGenerationRecords(records: GenerationRecord[]) {
   return [...records].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
+function createConfigFromPreset(providerId: string, presets: ProviderPreset[]): LLMConfig {
+  const preset = presets.find((item) => item.id === providerId) ?? presets[0];
+  return {
+    provider: preset?.id ?? "qwen",
+    model: preset?.model ?? "qwen-vl-plus",
+    apiKey: "",
+    baseUrl: preset?.baseUrl ?? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  };
+}
+
+function readStoredLLMConfig(): LLMConfig | undefined {
+  try {
+    const raw = localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as Partial<LLMConfig>;
+    if (
+      typeof parsed.provider !== "string" ||
+      typeof parsed.model !== "string" ||
+      typeof parsed.apiKey !== "string" ||
+      typeof parsed.baseUrl !== "string"
+    ) {
+      return undefined;
+    }
+    return {
+      provider: parsed.provider,
+      model: parsed.model,
+      apiKey: parsed.apiKey,
+      baseUrl: parsed.baseUrl
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function persistLLMConfig(config: LLMConfig) {
+  localStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+function getLLMConfigError(config: LLMConfig) {
+  if (!config.provider.trim()) return "请先配置 Provider";
+  if (!config.model.trim()) return "请先配置 Model";
+  if (!config.apiKey.trim()) return "请先配置 API Key";
+  if (!config.baseUrl.trim()) return "请先配置 Base URL";
+  return undefined;
+}
+
 export default function App() {
-  const [provider, setProvider] = useState<ProviderId | undefined>();
-  const [providers, setProviders] = useState(defaultProviders);
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => readStoredLLMConfig() ?? createConfigFromPreset("qwen", defaultProviders));
+  const [providers, setProviders] = useState<ProviderPreset[]>(defaultProviders);
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
   const [mode, setMode] = useState<InputMode>("image");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -44,22 +95,25 @@ export default function App() {
       const [providerResult, recordsResult] = await Promise.allSettled([getProviders(), listGenerationRecords()]);
       if (cancelled) return;
 
-      let nextProvider: ProviderId = "qwen";
       if (providerResult.status === "fulfilled") {
-        setProviders(providerResult.value.providers);
-        nextProvider = providerResult.value.default_provider;
+        const nextProviders = providerResult.value.providers.map((provider) => ({
+          ...provider,
+          baseUrl: provider.base_url ?? ""
+        }));
+        setProviders(nextProviders);
+        if (!readStoredLLMConfig()) {
+          setLlmConfig(createConfigFromPreset(providerResult.value.default_provider, nextProviders));
+        }
       }
 
       if (recordsResult.status === "fulfilled") {
         setGenerationRecords(recordsResult.value);
       }
-
-      setProvider(nextProvider);
     }
 
     initialize().catch(() => {
       if (cancelled) return;
-      setProvider("qwen");
+      setProviders(defaultProviders);
     });
 
     return () => {
@@ -123,8 +177,10 @@ export default function App() {
   }
 
   async function handleImageUpload(file: File, dataUrl: string) {
-    if (!provider) {
-      setError("Provider 尚未加载完成");
+    const configError = getLLMConfigError(llmConfig);
+    if (configError) {
+      setError(configError);
+      setConfigPanelOpen(true);
       return;
     }
     const operationId = beginOperation();
@@ -134,7 +190,7 @@ export default function App() {
     setMode("image");
     setImageDataUrl(dataUrl);
     try {
-      const result = await analyzeImage(provider, file);
+      const result = await analyzeImage(llmConfig, file);
       if (!isCurrentOperation(operationId)) return;
       const selection = applyAnalysis(result);
       await persistGenerationRecord(
@@ -159,8 +215,10 @@ export default function App() {
   }
 
   async function handleChatSend(message: string) {
-    if (!provider) {
-      setError("Provider 尚未加载完成");
+    const configError = getLLMConfigError(llmConfig);
+    if (configError) {
+      setError(configError);
+      setConfigPanelOpen(true);
       return;
     }
     const operationId = beginOperation();
@@ -170,7 +228,7 @@ export default function App() {
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: message }];
     setMessages(nextMessages);
     try {
-      const result = await rememberChat(provider, nextMessages, chatMemory);
+      const result = await rememberChat(llmConfig, nextMessages, chatMemory);
       if (!isCurrentOperation(operationId)) return;
       setMessages([...nextMessages, { role: "assistant", content: result.assistant_message }]);
       setChatMemory(result.chat_memory);
@@ -186,8 +244,10 @@ export default function App() {
 
   async function handleChatGenerate() {
     if (!messages.some((message) => message.role === "user")) return;
-    if (!provider) {
-      setError("Provider 尚未加载完成");
+    const configError = getLLMConfigError(llmConfig);
+    if (configError) {
+      setError(configError);
+      setConfigPanelOpen(true);
       return;
     }
     const operationId = beginOperation();
@@ -196,7 +256,7 @@ export default function App() {
     setError(undefined);
     setMode("chat");
     try {
-      const result = await generateFromChat(provider, messages, chatMemory);
+      const result = await generateFromChat(llmConfig, messages, chatMemory);
       if (!isCurrentOperation(operationId)) return;
       const nextMessages: ChatMessage[] = [...messages, { role: "assistant", content: result.assistant_message }];
       setMessages(nextMessages);
@@ -263,7 +323,15 @@ export default function App() {
     }
   }
 
+  function handleLLMConfigSave(config: LLMConfig) {
+    setLlmConfig(config);
+    persistLLMConfig(config);
+    setConfigPanelOpen(false);
+    setError(undefined);
+  }
+
   const previewLoadingLabel = mode === "image" ? "分析图片中..." : "生成头像中...";
+  const configSummary = `${llmConfig.provider || "未配置"} · ${llmConfig.model || "未配置模型"}`;
 
   return (
     <main className="app-shell">
@@ -277,9 +345,14 @@ export default function App() {
             <RotateCcw size={17} />
             重置
           </button>
-          <ProviderSelect value={provider} providers={providers} onChange={setProvider} />
+          <button className="llm-config-trigger" type="button" onClick={() => setConfigPanelOpen(true)} title="配置 LLM">
+            <Settings size={17} />
+            <span>{configSummary}</span>
+          </button>
         </div>
       </header>
+
+      <LLMConfigPanel config={llmConfig} open={configPanelOpen} presets={providers} onClose={() => setConfigPanelOpen(false)} onSave={handleLLMConfigSave} />
 
       {error && <div className="error-banner">{error}</div>}
 

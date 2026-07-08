@@ -1,5 +1,19 @@
-export type ProviderId = "qwen" | "doubao";
 export type InputMode = "image" | "chat";
+
+export interface LLMConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
+}
+
+export type ProviderPreset = {
+  id: string;
+  label: string;
+  model: string;
+  baseUrl: string;
+  configured: boolean;
+};
 
 export const hairValues = [
   "long01",
@@ -198,7 +212,7 @@ export type AnalysisResponse = {
   reasons: FeatureReason[];
   missing_fields: string[];
   defaults_applied: string[];
-  provider: ProviderId;
+  provider: string;
 };
 
 export type ChatRememberResponse = {
@@ -206,7 +220,7 @@ export type ChatRememberResponse = {
   chat_memory: ChatMemory;
   confidence: Partial<Record<AvatarFeatureKey, number>>;
   reasons: FeatureReason[];
-  provider: ProviderId;
+  provider: string;
 };
 
 export type ChatMessage = {
@@ -218,7 +232,7 @@ export type GenerationRecord = {
   id: string;
   createdAt: string;
   sourceMode: InputMode;
-  provider: ProviderId;
+  provider: string;
   uploadedImageDataUrl?: string;
   messages?: ChatMessage[];
   chatMemory?: ChatMemory;

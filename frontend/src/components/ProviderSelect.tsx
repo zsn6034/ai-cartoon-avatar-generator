@@ -1,16 +1,14 @@
-import type { ProviderId } from "../types/face";
-
 type Props = {
-  value?: ProviderId;
-  providers: Array<{ id: ProviderId; label: string; model: string; configured: boolean }>;
-  onChange: (provider: ProviderId) => void;
+  value?: string;
+  providers: Array<{ id: string; label: string; model: string; configured: boolean }>;
+  onChange: (provider: string) => void;
 };
 
 export function ProviderSelect({ value, providers, onChange }: Props) {
   return (
     <label className="provider-select">
       <span>Provider</span>
-      <select value={value ?? ""} onChange={(event) => onChange(event.target.value as ProviderId)} disabled={!value}>
+      <select value={value ?? ""} onChange={(event) => onChange(event.target.value)} disabled={!value}>
         {!value && <option value="">加载中</option>}
         {providers.map((provider) => (
           <option key={provider.id} value={provider.id}>

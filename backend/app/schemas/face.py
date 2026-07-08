@@ -276,14 +276,21 @@ class ChatMessage(BaseModel):
     content: str = Field(min_length=1)
 
 
+class LLMConfig(BaseModel):
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    api_key: str = Field(min_length=1)
+    base_url: str = Field(min_length=1)
+
+
 class ChatRememberRequest(BaseModel):
-    provider: Literal["qwen", "doubao"]
+    llm_config: LLMConfig
     messages: List[ChatMessage]
     current_memory: ChatMemory = Field(default_factory=ChatMemory)
 
 
 class ChatGenerateRequest(BaseModel):
-    provider: Literal["qwen", "doubao"]
+    llm_config: LLMConfig
     messages: List[ChatMessage]
     chat_memory: ChatMemory = Field(default_factory=ChatMemory)
 
@@ -293,7 +300,7 @@ class ChatRememberResponse(BaseModel):
     chat_memory: ChatMemory
     confidence: Dict[str, float]
     reasons: List[FeatureReason]
-    provider: Literal["qwen", "doubao"]
+    provider: str
 
 
 class AnalysisResponse(BaseModel):
@@ -304,7 +311,7 @@ class AnalysisResponse(BaseModel):
     reasons: List[FeatureReason]
     missing_fields: List[str]
     defaults_applied: List[str]
-    provider: Literal["qwen", "doubao"]
+    provider: str
 
 
 DEFAULT_FEATURES = AvatarFeatures(

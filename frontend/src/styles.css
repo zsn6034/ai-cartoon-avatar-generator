@@ -21,6 +21,7 @@ body {
 }
 
 button,
+input,
 select,
 textarea {
   font: inherit;
@@ -60,7 +61,11 @@ textarea {
   gap: 12px;
 }
 
-.workspace-reset {
+.workspace-reset,
+.llm-config-trigger,
+.primary-button,
+.secondary-button,
+.icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -69,10 +74,36 @@ textarea {
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
-  background: #31594c;
-  color: #fff;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.workspace-reset,
+.primary-button {
+  background: #31594c;
+  color: #fff;
+}
+
+.llm-config-trigger,
+.secondary-button,
+.icon-button {
+  border: 1px solid #cbd3cd;
+  background: #fff;
+  color: #2d4038;
+}
+
+.llm-config-trigger {
+  max-width: 340px;
+}
+
+.llm-config-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-button {
+  width: 38px;
+  padding: 0;
 }
 
 .provider-select {
@@ -87,6 +118,7 @@ textarea {
 }
 
 select,
+input,
 textarea {
   border: 1px solid #cbd3cd;
   border-radius: 8px;
@@ -94,9 +126,70 @@ textarea {
   color: #27211e;
 }
 
-select {
+select,
+input {
   min-height: 38px;
   padding: 0 10px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(29, 38, 34, 0.38);
+}
+
+.llm-modal {
+  width: min(100%, 520px);
+  border: 1px solid #d6ded8;
+  border-radius: 8px;
+  background: #f8faf7;
+  box-shadow: 0 24px 80px rgba(33, 43, 39, 0.28);
+  padding: 18px;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.modal-heading h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.modal-heading p {
+  margin: 0;
+  color: #687069;
+  line-height: 1.5;
+}
+
+.config-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.config-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.config-grid span {
+  color: #687069;
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .workspace {
@@ -616,6 +709,15 @@ select {
 
   .provider-select {
     min-width: 0;
+  }
+
+  .llm-config-trigger {
+    max-width: none;
+  }
+
+  .modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .inspector {
