@@ -58,6 +58,72 @@ pnpm --filter ai-cartoon-avatar-generator dev
 
 打开 `http://localhost:5173`。Vite 已配置 `/api` 代理到 `http://localhost:8000`。
 
+## 免费 Demo 部署
+
+推荐用 Cloudflare Pages 部署前端，用 Vercel Python Runtime 部署 FastAPI 后端。这个组合不依赖 Render 绑卡，也比 Hugging Face Spaces 更贴近普通 Web 后端部署。
+
+### 1. 部署后端到 Vercel
+
+`backend/pyproject.toml` 已配置 Vercel 入口：
+
+```toml
+[tool.vercel]
+entrypoint = "app.main:app"
+```
+
+在 Vercel 新建 Project，连接本仓库后配置：
+
+- Root Directory: `backend`
+- Framework Preset: `Other`
+- Build Command: 留空
+- Output Directory: 留空
+- Install Command: `pip install -r requirements.txt`
+
+Vercel 环境变量：
+
+```env
+DEFAULT_PROVIDER=qwen
+FRONTEND_ORIGIN=https://your-site.pages.dev
+QWEN_API_KEY=
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-vl-plus
+DOUBAO_API_KEY=
+DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+DOUBAO_MODEL=doubao-1-5-vision-pro-32k-250115
+```
+
+如果还没拿到 Cloudflare Pages 域名，可以先填 `http://localhost:5173`，等前端发布后再改成正式域名。多个来源可以用逗号分隔。
+
+部署成功后，后端地址通常类似：
+
+```text
+https://your-vercel-api.vercel.app
+```
+
+检查：
+
+```text
+https://your-vercel-api.vercel.app/api/health
+```
+
+### 2. 部署前端到 Cloudflare Pages
+
+Cloudflare Pages 连接同一个仓库，配置：
+
+- Root directory: `frontend`
+- Build command: `pnpm install --frozen-lockfile && pnpm build`
+- Build output directory: `dist`
+- Environment variable: `VITE_API_BASE_URL=https://your-vercel-api.vercel.app`
+
+`VITE_API_BASE_URL` 填 Vercel 后端地址，不要以 `/api` 结尾。
+
+### 3. 发布后检查
+
+1. 打开 `https://your-vercel-api.vercel.app/api/health`，应返回 `{"status":"ok"}`。
+2. 打开 Cloudflare Pages 前端域名。
+3. 在前端 LLM 配置里填 provider、model、baseUrl 和 API Key。
+4. 测试自由对话和“生成头像”。如果浏览器报 CORS，检查 Vercel 的 `FRONTEND_ORIGIN` 是否等于前端完整 origin，例如 `https://your-site.pages.dev`。
+
 ## API
 
 - `GET /api/health`

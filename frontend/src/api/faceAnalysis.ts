@@ -1,7 +1,13 @@
 import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, LLMConfig } from "../types/face";
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+function apiUrl(path: string) {
+  return `${apiBaseUrl}${path}`;
+}
+
 export async function getProviders() {
-  const response = await fetch("/api/providers");
+  const response = await fetch(apiUrl("/api/providers"));
   if (!response.ok) throw new Error("无法获取 Provider 列表");
   return response.json() as Promise<{
     default_provider: string;
@@ -22,7 +28,7 @@ export async function analyzeImage(llmConfig: LLMConfig, file: File): Promise<An
   const body = new FormData();
   body.append("llm_config", JSON.stringify(toServerConfig(llmConfig)));
   body.append("image", file);
-  const response = await fetch("/api/analyze/image", { method: "POST", body });
+  const response = await fetch(apiUrl("/api/analyze/image"), { method: "POST", body });
   if (!response.ok) {
     const message = response.status === 413 ? "图片超过 5MB 限制" : "图片分析失败";
     throw new Error(message);
@@ -35,7 +41,7 @@ export async function rememberChat(
   messages: ChatMessage[],
   currentMemory: ChatMemory
 ): Promise<ChatRememberResponse> {
-  const response = await fetch("/api/chat/remember", {
+  const response = await fetch(apiUrl("/api/chat/remember"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -49,7 +55,7 @@ export async function rememberChat(
 }
 
 export async function generateFromChat(llmConfig: LLMConfig, messages: ChatMessage[], chatMemory: ChatMemory): Promise<AnalysisResponse> {
-  const response = await fetch("/api/chat/generate", {
+  const response = await fetch(apiUrl("/api/chat/generate"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

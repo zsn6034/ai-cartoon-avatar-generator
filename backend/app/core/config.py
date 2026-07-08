@@ -15,6 +15,12 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    @property
+    def allowed_frontend_origins(self) -> list[str]:
+        origins = [origin.strip() for origin in self.frontend_origin.split(",")]
+        defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
+        return [origin for origin in [*origins, *defaults] if origin]
+
 
 @lru_cache
 def get_settings() -> Settings:
