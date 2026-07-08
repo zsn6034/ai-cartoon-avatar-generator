@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     doubao_model: str = "doubao-1-5-vision-pro-32k-250115"
     default_provider: str = "qwen"
     frontend_origin: str = "http://localhost:5173"
+    frontend_origin_regex: str = r"https://.*\.vercel\.app"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
         origins = [origin.strip() for origin in self.frontend_origin.split(",")]
         defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
         return [origin for origin in [*origins, *defaults] if origin]
+
+    @property
+    def allowed_frontend_origin_regex(self) -> str | None:
+        return self.frontend_origin_regex.strip() or None
 
 
 @lru_cache

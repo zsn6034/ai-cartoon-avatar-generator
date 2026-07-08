@@ -78,7 +78,8 @@ Vercel 环境变量：
 
 ```env
 DEFAULT_PROVIDER=qwen
-FRONTEND_ORIGIN=https://your-site.pages.dev
+FRONTEND_ORIGIN=https://your-vercel-web.vercel.app
+FRONTEND_ORIGIN_REGEX=https://.*\.vercel\.app
 QWEN_API_KEY=
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-vl-plus
@@ -87,7 +88,7 @@ DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 DOUBAO_MODEL=doubao-1-5-vision-pro-32k-250115
 ```
 
-如果还没拿到 Cloudflare Pages 域名，可以先填 `http://localhost:5173`，等前端发布后再改成正式域名。多个来源可以用逗号分隔。
+如果还没拿到前端域名，可以先填 `http://localhost:5173`，等前端发布后再改成正式域名。多个来源可以用逗号分隔。`FRONTEND_ORIGIN_REGEX` 默认放行 `.vercel.app` 域名，demo 阶段可保留；正式发布时建议改成空值，并只保留精确的 `FRONTEND_ORIGIN`。
 
 部署成功后，后端地址通常类似：
 
