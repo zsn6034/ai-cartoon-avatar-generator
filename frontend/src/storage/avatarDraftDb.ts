@@ -129,3 +129,14 @@ export async function addGenerationRecord(record: GenerationRecord): Promise<voi
   });
   db.close();
 }
+
+export async function deleteGenerationRecord(id: string): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(RECORD_STORE_NAME, "readwrite");
+    transaction.objectStore(RECORD_STORE_NAME).delete(id);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}

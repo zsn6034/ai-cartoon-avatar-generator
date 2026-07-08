@@ -9,13 +9,17 @@ import { InputPanel } from "./components/InputPanel";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { ProviderSelect } from "./components/ProviderSelect";
 import { ReasonPanel } from "./components/ReasonPanel";
-import { addGenerationRecord, listGenerationRecords } from "./storage/avatarDraftDb";
+import { addGenerationRecord, deleteGenerationRecord, listGenerationRecords } from "./storage/avatarDraftDb";
 import type { AnalysisResponse, AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, ProviderId } from "./types/face";
 
 const defaultProviders = [
   { id: "qwen" as ProviderId, label: "Qwen", model: "qwen-vl-plus", configured: false },
   { id: "doubao" as ProviderId, label: "Doubao", model: "doubao", configured: false }
 ];
+
+function sortGenerationRecords(records: GenerationRecord[]) {
+  return [...records].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+}
 
 export default function App() {
   const [provider, setProvider] = useState<ProviderId | undefined>();
@@ -249,6 +253,16 @@ export default function App() {
     setPreviewBusy(false);
   }
 
+  async function handleRecordDelete(record: GenerationRecord) {
+    setGenerationRecords((records) => records.filter((item) => item.id !== record.id));
+    try {
+      await deleteGenerationRecord(record.id);
+    } catch (caught) {
+      setGenerationRecords((records) => sortGenerationRecords([...records, record]));
+      setError(caught instanceof Error ? `删除记录失败：${caught.message}` : "删除记录失败");
+    }
+  }
+
   const previewLoadingLabel = mode === "image" ? "分析图片中..." : "生成头像中...";
 
   return (
@@ -283,7 +297,7 @@ export default function App() {
         />
         <PreviewPanel avatar={currentSelection} loading={previewBusy} loadingLabel={previewLoadingLabel} />
         <aside className="panel inspector">
-          <GenerationHistory records={generationRecords} onSelect={handleRecordSelect} />
+          <GenerationHistory records={generationRecords} onSelect={handleRecordSelect} onDelete={handleRecordDelete} />
           <FeatureEditor value={currentSelection} aiValue={generatedSelection} confidence={analysis?.confidence ?? {}} onChange={setCurrentSelection} />
           <ReasonPanel analysis={analysis} aiSelection={generatedSelection} currentSelection={currentSelection} />
         </aside>

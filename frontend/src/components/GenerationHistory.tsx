@@ -1,10 +1,11 @@
-import { ImageIcon, MessageSquareText } from "lucide-react";
+import { ImageIcon, MessageSquareText, X } from "lucide-react";
 import { AdventurerAvatar } from "../avatar/AdventurerAvatar";
 import type { GenerationRecord } from "../types/face";
 
 type Props = {
   records: GenerationRecord[];
   onSelect: (record: GenerationRecord) => void;
+  onDelete: (record: GenerationRecord) => void;
 };
 
 const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -19,8 +20,14 @@ const sourceLabels = {
   chat: "对话生成"
 };
 
-export function GenerationHistory({ records, onSelect }: Props) {
+export function GenerationHistory({ records, onSelect, onDelete }: Props) {
   const isScrollable = records.length > 3;
+
+  function requestDelete(record: GenerationRecord) {
+    if (window.confirm("确定删除这条生成记录吗？删除后无法恢复。")) {
+      onDelete(record);
+    }
+  }
 
   return (
     <section className={`generation-history ${isScrollable ? "is-scrollable" : ""}`}>
@@ -34,21 +41,26 @@ export function GenerationHistory({ records, onSelect }: Props) {
         <div className="history-list-shell">
           <div className="history-list">
             {records.map((record) => (
-              <button className="history-item" key={record.id} type="button" onClick={() => onSelect(record)}>
-                <span className="history-avatar" aria-hidden="true">
-                  <AdventurerAvatar avatar={record.currentSelection} />
-                </span>
-                <span className="history-meta">
-                  <span className="history-title">
-                    {record.sourceMode === "image" ? <ImageIcon size={15} /> : <MessageSquareText size={15} />}
-                    {sourceLabels[record.sourceMode]}
+              <div className="history-item" key={record.id}>
+                <button className="history-open" type="button" onClick={() => onSelect(record)}>
+                  <span className="history-avatar" aria-hidden="true">
+                    <AdventurerAvatar avatar={record.currentSelection} />
                   </span>
-                  <span className="history-subtitle">
-                    {timeFormatter.format(new Date(record.createdAt))} · {record.provider}
+                  <span className="history-meta">
+                    <span className="history-title">
+                      {record.sourceMode === "image" ? <ImageIcon size={15} /> : <MessageSquareText size={15} />}
+                      {sourceLabels[record.sourceMode]}
+                    </span>
+                    <span className="history-subtitle">
+                      {timeFormatter.format(new Date(record.createdAt))} · {record.provider}
+                    </span>
                   </span>
-                </span>
-                {record.uploadedImageDataUrl && <img className="history-upload-thumb" src={record.uploadedImageDataUrl} alt="" />}
-              </button>
+                  {record.uploadedImageDataUrl && <img className="history-upload-thumb" src={record.uploadedImageDataUrl} alt="" />}
+                </button>
+                <button className="history-delete" type="button" onClick={() => requestDelete(record)} aria-label="删除生成记录" title="删除生成记录">
+                  <X size={15} />
+                </button>
+              </div>
             ))}
           </div>
         </div>
