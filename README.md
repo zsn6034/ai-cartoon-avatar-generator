@@ -68,8 +68,10 @@ pnpm --filter ai-cartoon-avatar-generator dev
 
 ```toml
 [tool.vercel]
-entrypoint = "app.main:app"
+entrypoint = "main:app"
 ```
+
+同时 `backend/api/index.py` 和 `backend/vercel.json` 会把 `/api/*` 请求明确路由到 FastAPI，避免 Vercel 部署后 `/api/health` 变成平台 404。
 
 在 Vercel 新建 Project，连接本仓库后配置：
 
