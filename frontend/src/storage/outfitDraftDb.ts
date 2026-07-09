@@ -1,10 +1,10 @@
-import type { AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode } from "../types/face";
+import type { ChatMessage, InputMode, OutfitChatMemory, OutfitGenerationRecord, OutfitSelection } from "../types/outfit";
 
 const DB_NAME = "ai-cartoon-avatar";
 const DB_VERSION = 3;
 const DRAFT_STORE_NAME = "drafts";
-const RECORD_STORE_NAME = "generation-records";
-const OUTFIT_RECORD_STORE_NAME = "outfit-generation-records";
+const AVATAR_RECORD_STORE_NAME = "generation-records";
+const RECORD_STORE_NAME = "outfit-generation-records";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -14,11 +14,11 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(DRAFT_STORE_NAME)) {
         db.createObjectStore(DRAFT_STORE_NAME);
       }
+      if (!db.objectStoreNames.contains(AVATAR_RECORD_STORE_NAME)) {
+        db.createObjectStore(AVATAR_RECORD_STORE_NAME, { keyPath: "id" });
+      }
       if (!db.objectStoreNames.contains(RECORD_STORE_NAME)) {
         db.createObjectStore(RECORD_STORE_NAME, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(OUTFIT_RECORD_STORE_NAME)) {
-        db.createObjectStore(OUTFIT_RECORD_STORE_NAME, { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -30,19 +30,14 @@ function isSourceMode(value: unknown): value is InputMode {
   return value === "image" || value === "chat";
 }
 
-function isAvatarSelection(value: unknown): value is AvatarSelection {
+function isOutfitSelection(value: unknown): value is OutfitSelection {
   if (!value || typeof value !== "object") return false;
-  const selection = value as Partial<Record<keyof AvatarSelection, unknown>>;
+  const selection = value as Partial<Record<keyof OutfitSelection, unknown>>;
   return (
     typeof selection.hair === "string" &&
-    typeof selection.eyes === "string" &&
-    typeof selection.eyebrows === "string" &&
-    typeof selection.mouth === "string" &&
-    typeof selection.hairColor === "string" &&
-    typeof selection.skinColor === "string" &&
-    typeof selection.details === "string" &&
-    typeof selection.glasses === "string" &&
-    typeof selection.earrings === "string"
+    typeof selection.top === "string" &&
+    typeof selection.bottom === "string" &&
+    typeof selection.shoes === "string"
   );
 }
 
@@ -57,9 +52,9 @@ function normalizeMessages(value: unknown): ChatMessage[] | undefined {
     .map((message) => ({ role: message.role, content: message.content }));
 }
 
-function normalizeChatMemory(value: unknown): ChatMemory | undefined {
+function normalizeChatMemory(value: unknown): OutfitChatMemory | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const memory = value as Partial<ChatMemory>;
+  const memory = value as Partial<OutfitChatMemory>;
   return {
     summary: typeof memory.summary === "string" ? memory.summary : "",
     known_features: memory.known_features ?? {},
@@ -67,18 +62,19 @@ function normalizeChatMemory(value: unknown): ChatMemory | undefined {
   };
 }
 
-function normalizeRecord(raw: unknown): GenerationRecord | undefined {
+function normalizeRecord(raw: unknown): OutfitGenerationRecord | undefined {
   if (!raw || typeof raw !== "object") return undefined;
 
-  const record = raw as Partial<GenerationRecord> & Record<string, unknown>;
+  const record = raw as Partial<OutfitGenerationRecord> & Record<string, unknown>;
   if (
     typeof record.id !== "string" ||
     typeof record.createdAt !== "string" ||
     !isSourceMode(record.sourceMode) ||
     typeof record.provider !== "string" ||
-    !isAvatarSelection(record.features) ||
-    !isAvatarSelection(record.generatedSelection) ||
-    !isAvatarSelection(record.currentSelection) ||
+    !isOutfitSelection(record.features) ||
+    !isOutfitSelection(record.generatedSelection) ||
+    !isOutfitSelection(record.currentSelection) ||
+    typeof record.action !== "string" ||
     !record.analysis ||
     typeof record.analysis !== "object"
   ) {
@@ -96,20 +92,21 @@ function normalizeRecord(raw: unknown): GenerationRecord | undefined {
     features: record.features,
     generatedSelection: record.generatedSelection,
     currentSelection: record.currentSelection,
-    analysis: record.analysis as GenerationRecord["analysis"]
+    action: record.action as OutfitGenerationRecord["action"],
+    analysis: record.analysis as OutfitGenerationRecord["analysis"]
   };
 }
 
-export async function listGenerationRecords(): Promise<GenerationRecord[]> {
+export async function listOutfitGenerationRecords(): Promise<OutfitGenerationRecord[]> {
   const db = await openDb();
-  const records = await new Promise<GenerationRecord[]>((resolve, reject) => {
+  const records = await new Promise<OutfitGenerationRecord[]>((resolve, reject) => {
     const transaction = db.transaction(RECORD_STORE_NAME, "readonly");
     const request = transaction.objectStore(RECORD_STORE_NAME).getAll();
     request.onsuccess = () => {
       resolve(
         request.result
           .map(normalizeRecord)
-          .filter((record): record is GenerationRecord => Boolean(record))
+          .filter((record): record is OutfitGenerationRecord => Boolean(record))
           .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       );
     };
@@ -119,7 +116,7 @@ export async function listGenerationRecords(): Promise<GenerationRecord[]> {
   return records;
 }
 
-export async function addGenerationRecord(record: GenerationRecord): Promise<void> {
+export async function addOutfitGenerationRecord(record: OutfitGenerationRecord): Promise<void> {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(RECORD_STORE_NAME, "readwrite");
@@ -130,7 +127,7 @@ export async function addGenerationRecord(record: GenerationRecord): Promise<voi
   db.close();
 }
 
-export async function deleteGenerationRecord(id: string): Promise<void> {
+export async function deleteOutfitGenerationRecord(id: string): Promise<void> {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(RECORD_STORE_NAME, "readwrite");

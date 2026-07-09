@@ -1,19 +1,29 @@
 import { RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { analyzeImage, generateFromChat, getProviders, rememberChat } from "./api/faceAnalysis";
-import { defaultChatMemory, defaultFeatures } from "./assetsRegistry/schema";
-import { completeFeatures } from "./assetsRegistry/mapping";
-import { FeatureEditor } from "./components/FeatureEditor";
-import { GenerationHistory } from "./components/GenerationHistory";
-import { InputPanel } from "./components/InputPanel";
-import { LLMConfigPanel } from "./components/LLMConfigPanel";
-import { PreviewPanel } from "./components/PreviewPanel";
-import { ReasonPanel } from "./components/ReasonPanel";
-import { OutfitChangePage } from "./pages/OutfitChangePage";
-import { addGenerationRecord, deleteGenerationRecord, listGenerationRecords } from "./storage/avatarDraftDb";
-import type { AnalysisResponse, AvatarSelection, ChatMemory, ChatMessage, GenerationRecord, InputMode, LLMConfig, ProviderPreset } from "./types/face";
+import { getProviders } from "../api/faceAnalysis";
+import { analyzeOutfitImage, generateOutfitFromChat, rememberOutfitChat } from "../api/outfitAnalysis";
+import { InputPanel } from "../components/InputPanel";
+import { LLMConfigPanel } from "../components/LLMConfigPanel";
+import { OutfitFeatureEditor } from "../components/outfit/OutfitFeatureEditor";
+import { OutfitGenerationHistory } from "../components/outfit/OutfitGenerationHistory";
+import { OutfitPreviewPanel } from "../components/outfit/OutfitPreviewPanel";
+import { OutfitReasonPanel } from "../components/outfit/OutfitReasonPanel";
+import { defaultOutfitChatMemory, defaultOutfitFeatures } from "../outfitRegistry/schema";
+import { addOutfitGenerationRecord, deleteOutfitGenerationRecord, listOutfitGenerationRecords } from "../storage/outfitDraftDb";
+import type {
+  ChatMessage,
+  InputMode,
+  LLMConfig,
+  OutfitAction,
+  OutfitAnalysisResponse,
+  OutfitChatMemory,
+  OutfitGenerationRecord,
+  OutfitSelection
+} from "../types/outfit";
+import type { ProviderPreset } from "../types/face";
 
 const LLM_CONFIG_STORAGE_KEY = "ai-cartoon-avatar.llm-config";
+const defaultAction: OutfitAction = "idle";
 
 const defaultProviders: ProviderPreset[] = [
   { id: "qwen", label: "Qwen", model: "qwen-vl-plus", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", configured: false },
@@ -22,7 +32,7 @@ const defaultProviders: ProviderPreset[] = [
   { id: "custom", label: "Custom", model: "", baseUrl: "", configured: false }
 ];
 
-function sortGenerationRecords(records: GenerationRecord[]) {
+function sortOutfitGenerationRecords(records: OutfitGenerationRecord[]) {
   return [...records].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
@@ -72,18 +82,19 @@ function getLLMConfigError(config: LLMConfig) {
   return undefined;
 }
 
-function AvatarPage() {
+export function OutfitChangePage() {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => readStoredLLMConfig() ?? createConfigFromPreset("qwen", defaultProviders));
   const [providers, setProviders] = useState<ProviderPreset[]>(defaultProviders);
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
   const [mode, setMode] = useState<InputMode>("image");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatMemory, setChatMemory] = useState<ChatMemory>(defaultChatMemory);
-  const [analysis, setAnalysis] = useState<AnalysisResponse | undefined>();
-  const [generatedSelection, setGeneratedSelection] = useState<AvatarSelection>(defaultFeatures);
-  const [currentSelection, setCurrentSelection] = useState<AvatarSelection>(defaultFeatures);
-  const [generationRecords, setGenerationRecords] = useState<GenerationRecord[]>([]);
+  const [chatMemory, setChatMemory] = useState<OutfitChatMemory>(defaultOutfitChatMemory);
+  const [analysis, setAnalysis] = useState<OutfitAnalysisResponse | undefined>();
+  const [generatedSelection, setGeneratedSelection] = useState<OutfitSelection>(defaultOutfitFeatures);
+  const [currentSelection, setCurrentSelection] = useState<OutfitSelection>(defaultOutfitFeatures);
+  const [action, setAction] = useState<OutfitAction>(defaultAction);
+  const [generationRecords, setGenerationRecords] = useState<OutfitGenerationRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -93,7 +104,7 @@ function AvatarPage() {
     let cancelled = false;
 
     async function initialize() {
-      const [providerResult, recordsResult] = await Promise.allSettled([getProviders(), listGenerationRecords()]);
+      const [providerResult, recordsResult] = await Promise.allSettled([getProviders(), listOutfitGenerationRecords()]);
       if (cancelled) return;
 
       if (providerResult.status === "fulfilled") {
@@ -135,33 +146,33 @@ function AvatarPage() {
     return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function applyAnalysis(result: AnalysisResponse) {
-    const nextSelection = completeFeatures(result.features);
+  function applyAnalysis(result: OutfitAnalysisResponse) {
     setAnalysis(result);
-    setGeneratedSelection(nextSelection);
-    setCurrentSelection(nextSelection);
-    return nextSelection;
+    setGeneratedSelection(result.features);
+    setCurrentSelection(result.features);
+    return result.features;
   }
 
-  async function persistGenerationRecord(record: GenerationRecord) {
+  async function persistGenerationRecord(record: OutfitGenerationRecord) {
     setGenerationRecords((records) => [record, ...records.filter((item) => item.id !== record.id)]);
     try {
-      await addGenerationRecord(record);
+      await addOutfitGenerationRecord(record);
     } catch (caught) {
       setError(caught instanceof Error ? `生成成功，但记录保存失败：${caught.message}` : "生成成功，但记录保存失败");
     }
   }
 
   function createGenerationRecord(
-    result: AnalysisResponse,
-    selection: AvatarSelection,
+    result: OutfitAnalysisResponse,
+    selection: OutfitSelection,
     options: {
       sourceMode: InputMode;
+      action: OutfitAction;
       uploadedImageDataUrl?: string;
       messages?: ChatMessage[];
-      chatMemory?: ChatMemory;
+      chatMemory?: OutfitChatMemory;
     }
-  ): GenerationRecord {
+  ): OutfitGenerationRecord {
     return {
       id: createRecordId(),
       createdAt: new Date().toISOString(),
@@ -173,6 +184,7 @@ function AvatarPage() {
       features: result.features,
       generatedSelection: selection,
       currentSelection: selection,
+      action: options.action,
       analysis: result
     };
   }
@@ -191,22 +203,22 @@ function AvatarPage() {
     setMode("image");
     setImageDataUrl(dataUrl);
     try {
-      const result = await analyzeImage(llmConfig, file);
+      const result = await analyzeOutfitImage(llmConfig, file);
       if (!isCurrentOperation(operationId)) return;
       const selection = applyAnalysis(result);
       await persistGenerationRecord(
         createGenerationRecord(result, selection, {
           sourceMode: "image",
+          action,
           uploadedImageDataUrl: dataUrl
         })
       );
     } catch (caught) {
       if (!isCurrentOperation(operationId)) return;
-      setError(caught instanceof Error ? caught.message : "图片分析失败");
-      const fallback = completeFeatures(defaultFeatures);
+      setError(caught instanceof Error ? caught.message : "3D 换装图片分析失败");
       setAnalysis(undefined);
-      setGeneratedSelection(fallback);
-      setCurrentSelection(fallback);
+      setGeneratedSelection(defaultOutfitFeatures);
+      setCurrentSelection(defaultOutfitFeatures);
     } finally {
       if (isCurrentOperation(operationId)) {
         setPreviewBusy(false);
@@ -229,13 +241,13 @@ function AvatarPage() {
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: message }];
     setMessages(nextMessages);
     try {
-      const result = await rememberChat(llmConfig, nextMessages, chatMemory);
+      const result = await rememberOutfitChat(llmConfig, nextMessages, chatMemory);
       if (!isCurrentOperation(operationId)) return;
       setMessages([...nextMessages, { role: "assistant", content: result.assistant_message }]);
       setChatMemory(result.chat_memory);
     } catch (caught) {
       if (!isCurrentOperation(operationId)) return;
-      setError(caught instanceof Error ? caught.message : "对话记忆更新失败");
+      setError(caught instanceof Error ? caught.message : "3D 换装对话记忆更新失败");
     } finally {
       if (isCurrentOperation(operationId)) {
         setBusy(false);
@@ -257,7 +269,7 @@ function AvatarPage() {
     setError(undefined);
     setMode("chat");
     try {
-      const result = await generateFromChat(llmConfig, messages, chatMemory);
+      const result = await generateOutfitFromChat(llmConfig, messages, chatMemory);
       if (!isCurrentOperation(operationId)) return;
       const nextMessages: ChatMessage[] = [...messages, { role: "assistant", content: result.assistant_message }];
       setMessages(nextMessages);
@@ -265,13 +277,14 @@ function AvatarPage() {
       await persistGenerationRecord(
         createGenerationRecord(result, selection, {
           sourceMode: "chat",
+          action,
           messages: nextMessages,
           chatMemory
         })
       );
     } catch (caught) {
       if (!isCurrentOperation(operationId)) return;
-      setError(caught instanceof Error ? caught.message : "头像生成失败");
+      setError(caught instanceof Error ? caught.message : "3D 换装生成失败");
     } finally {
       if (isCurrentOperation(operationId)) {
         setPreviewBusy(false);
@@ -285,41 +298,43 @@ function AvatarPage() {
     setMode("image");
     setImageDataUrl(undefined);
     setMessages([]);
-    setChatMemory(defaultChatMemory);
+    setChatMemory(defaultOutfitChatMemory);
     setAnalysis(undefined);
-    setGeneratedSelection(defaultFeatures);
-    setCurrentSelection(defaultFeatures);
+    setGeneratedSelection(defaultOutfitFeatures);
+    setCurrentSelection(defaultOutfitFeatures);
+    setAction(defaultAction);
     setError(undefined);
     setBusy(false);
     setPreviewBusy(false);
   }
 
-  function handleRecordSelect(record: GenerationRecord) {
+  function handleRecordSelect(record: OutfitGenerationRecord) {
     beginOperation();
     setMode(record.sourceMode);
     if (record.sourceMode === "image") {
       setImageDataUrl(record.uploadedImageDataUrl);
       setMessages([]);
-      setChatMemory(defaultChatMemory);
+      setChatMemory(defaultOutfitChatMemory);
     } else {
       setImageDataUrl(undefined);
       setMessages(record.messages ?? []);
-      setChatMemory(record.chatMemory ?? defaultChatMemory);
+      setChatMemory(record.chatMemory ?? defaultOutfitChatMemory);
     }
     setAnalysis(record.analysis);
     setGeneratedSelection(record.generatedSelection);
     setCurrentSelection(record.currentSelection);
+    setAction(record.action);
     setError(undefined);
     setBusy(false);
     setPreviewBusy(false);
   }
 
-  async function handleRecordDelete(record: GenerationRecord) {
+  async function handleRecordDelete(record: OutfitGenerationRecord) {
     setGenerationRecords((records) => records.filter((item) => item.id !== record.id));
     try {
-      await deleteGenerationRecord(record.id);
+      await deleteOutfitGenerationRecord(record.id);
     } catch (caught) {
-      setGenerationRecords((records) => sortGenerationRecords([...records, record]));
+      setGenerationRecords((records) => sortOutfitGenerationRecords([...records, record]));
       setError(caught instanceof Error ? `删除记录失败：${caught.message}` : "删除记录失败");
     }
   }
@@ -331,19 +346,19 @@ function AvatarPage() {
     setError(undefined);
   }
 
-  const previewLoadingLabel = mode === "image" ? "分析图片中..." : "生成头像中...";
+  const previewLoadingLabel = mode === "image" ? "分析图片并匹配 3D 资产中..." : "生成 3D 搭配中...";
   const configSummary = `${llmConfig.provider || "未配置"} · ${llmConfig.model || "未配置模型"}`;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell outfit-shell">
       <header className="app-header">
         <div>
-          <h1>AI 卡通头像生成器</h1>
-          <p>从照片或自由描述生成 DiceBear Adventurer 风格的 SVG 部件头像。</p>
+          <h1>AI 3D 换装</h1>
+          <p>从照片或自由描述匹配 Messenger 3D 角色资产，并预览骨骼动作。</p>
         </div>
         <div className="header-controls">
-          <a className="page-nav-link" href="/3d-outfit-change" title="打开 3D 换装">
-            3D 换装
+          <a className="page-nav-link" href="/" title="打开 2D 头像生成">
+            2D 头像
           </a>
           <button className="workspace-reset" type="button" onClick={handleWorkspaceReset} title="重置当前工作区">
             <RotateCcw size={17} />
@@ -372,17 +387,13 @@ function AvatarPage() {
           onChatGenerate={handleChatGenerate}
           onChatReset={handleWorkspaceReset}
         />
-        <PreviewPanel avatar={currentSelection} loading={previewBusy} loadingLabel={previewLoadingLabel} />
+        <OutfitPreviewPanel outfit={currentSelection} action={action} loading={previewBusy} loadingLabel={previewLoadingLabel} onActionChange={setAction} />
         <aside className="panel inspector">
-          <GenerationHistory records={generationRecords} onSelect={handleRecordSelect} onDelete={handleRecordDelete} />
-          <FeatureEditor value={currentSelection} aiValue={generatedSelection} confidence={analysis?.confidence ?? {}} onChange={setCurrentSelection} />
-          <ReasonPanel analysis={analysis} aiSelection={generatedSelection} currentSelection={currentSelection} />
+          <OutfitGenerationHistory records={generationRecords} onSelect={handleRecordSelect} onDelete={handleRecordDelete} />
+          <OutfitFeatureEditor value={currentSelection} aiValue={generatedSelection} confidence={analysis?.confidence ?? {}} onChange={setCurrentSelection} />
+          <OutfitReasonPanel analysis={analysis} aiSelection={generatedSelection} currentSelection={currentSelection} />
         </aside>
       </div>
     </main>
   );
-}
-
-export default function App() {
-  return window.location.pathname === "/3d-outfit-change" ? <OutfitChangePage /> : <AvatarPage />;
 }

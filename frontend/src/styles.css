@@ -63,6 +63,7 @@ textarea {
 
 .workspace-reset,
 .llm-config-trigger,
+.page-nav-link,
 .primary-button,
 .secondary-button,
 .icon-button {
@@ -85,11 +86,16 @@ textarea {
 }
 
 .llm-config-trigger,
+.page-nav-link,
 .secondary-button,
 .icon-button {
   border: 1px solid #cbd3cd;
   background: #fff;
   color: #2d4038;
+}
+
+.page-nav-link {
+  text-decoration: none;
 }
 
 .llm-config-trigger {
@@ -386,6 +392,81 @@ input {
   padding: 18px;
 }
 
+.outfit-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f7faf8 0%, #e8eee9 100%);
+}
+
+.outfit-preview-toolbar {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+}
+
+.outfit-preview-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #cbd3cd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2d4038;
+  box-shadow: 0 8px 24px rgba(48, 62, 56, 0.1);
+}
+
+.outfit-preview-toolbar span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.outfit-preview-toolbar select {
+  width: 112px;
+}
+
+.outfit-viewer {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: grab;
+}
+
+.outfit-viewer:active {
+  cursor: grabbing;
+}
+
+.outfit-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(247, 250, 248, 0.74);
+  color: #2d4038;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+.viewer-status.error {
+  color: #8c3426;
+}
+
 .preview-loading {
   position: absolute;
   inset: 0;
@@ -554,6 +635,23 @@ input {
   border-radius: 6px;
 }
 
+.outfit-history-item {
+  height: 82px;
+}
+
+.outfit-history-token {
+  border: 1px solid #cfd8d2;
+  border-radius: 8px;
+  background: #31594c;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.outfit-history-assets {
+  font-size: 12px;
+}
+
 .history-meta {
   display: grid;
   gap: 4px;
@@ -627,6 +725,15 @@ input {
 .feature-row.changed select {
   border-color: #bf713c;
   background: #fff7ef;
+}
+
+.outfit-feature-row {
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+
+.outfit-feature-row select {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .reason-panel {
@@ -724,5 +831,23 @@ input {
     position: static;
     max-height: none;
     overflow: visible;
+  }
+
+  .outfit-viewer {
+    min-height: 440px;
+  }
+
+  .outfit-preview-toolbar {
+    right: auto;
+    left: auto;
+  }
+
+  .outfit-preview-toolbar label {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .outfit-preview-toolbar select {
+    width: min(58vw, 180px);
   }
 }
