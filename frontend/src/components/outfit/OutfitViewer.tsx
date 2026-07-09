@@ -17,6 +17,8 @@ type SceneState = {
   animationFrame?: number;
 };
 
+const previewBackgroundColor = "#d9fb9f";
+
 function fitCamera(camera: THREE.PerspectiveCamera) {
   camera.position.set(0, 0.25, 5.2);
   camera.lookAt(0, 0.05, 0);
@@ -36,7 +38,7 @@ export function OutfitViewer({ selection, action }: Props) {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 100);
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     const clock = new THREE.Clock();
     const hemisphere = new THREE.HemisphereLight(0xffffff, 0x4b5560, 2.1);
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -44,7 +46,9 @@ export function OutfitViewer({ selection, action }: Props) {
     let dragging = false;
     let lastX = 0;
 
+    scene.background = new THREE.Color(previewBackgroundColor);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setClearColor(previewBackgroundColor, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
