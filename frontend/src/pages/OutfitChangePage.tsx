@@ -25,6 +25,10 @@ import type { ProviderPreset } from "../types/face";
 const LLM_CONFIG_STORAGE_KEY = "ai-cartoon-avatar.llm-config";
 const defaultAction: OutfitAction = "idle";
 
+type Props = {
+  onOpenAvatar: () => void;
+};
+
 const defaultProviders: ProviderPreset[] = [
   { id: "qwen", label: "Qwen", model: "qwen-vl-plus", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", configured: false },
   { id: "doubao", label: "Doubao", model: "doubao-1-5-vision-pro-32k-250115", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", configured: false },
@@ -82,7 +86,7 @@ function getLLMConfigError(config: LLMConfig) {
   return undefined;
 }
 
-export function OutfitChangePage() {
+export function OutfitChangePage({ onOpenAvatar }: Props) {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => readStoredLLMConfig() ?? createConfigFromPreset("qwen", defaultProviders));
   const [providers, setProviders] = useState<ProviderPreset[]>(defaultProviders);
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
@@ -357,9 +361,9 @@ export function OutfitChangePage() {
           <p>从照片或自由描述匹配 Messenger 3D 角色资产，并预览骨骼动作。</p>
         </div>
         <div className="header-controls">
-          <a className="page-nav-link" href="/" title="打开 2D 头像生成">
+          <button className="page-nav-link" type="button" onClick={onOpenAvatar} title="打开 2D 头像生成">
             2D 头像
-          </a>
+          </button>
           <button className="workspace-reset" type="button" onClick={handleWorkspaceReset} title="重置当前工作区">
             <RotateCcw size={17} />
             重置

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
         return [origin for origin in [*origins, *defaults] if origin]
 
     @property
-    def allowed_frontend_origin_regex(self) -> str | None:
+    def allowed_frontend_origin_regex(self) -> Optional[str]:
         return self.frontend_origin_regex.strip() or None
 
 

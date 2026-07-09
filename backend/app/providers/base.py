@@ -14,6 +14,7 @@ from app.schemas.face import (
     ChatRememberResponse,
     DEFAULT_FEATURES,
     FEATURE_KEYS,
+    FEATURE_VALUE_DESCRIPTIONS,
     FeatureReason,
     LLMConfig,
     PartialAvatarFeatures,
@@ -22,6 +23,7 @@ from app.schemas.outfit import (
     ALLOWED_OUTFIT_VALUES,
     DEFAULT_OUTFIT_FEATURES,
     OUTFIT_FEATURE_KEYS,
+    OUTFIT_VALUE_DESCRIPTIONS,
     OutfitAnalysisResponse,
     OutfitChatMemory,
     OutfitChatRememberResponse,
@@ -30,11 +32,23 @@ from app.schemas.outfit import (
 
 
 FEATURE_OPTIONS_TEXT = json.dumps(
-    {key: sorted(values) for key, values in ALLOWED_FEATURE_VALUES.items()},
+    {
+        key: [
+            {"value": value, "description": FEATURE_VALUE_DESCRIPTIONS.get(key, {}).get(value, value)}
+            for value in sorted(values)
+        ]
+        for key, values in ALLOWED_FEATURE_VALUES.items()
+    },
     ensure_ascii=False,
 )
 OUTFIT_OPTIONS_TEXT = json.dumps(
-    {key: sorted(values) for key, values in ALLOWED_OUTFIT_VALUES.items()},
+    {
+        key: [
+            {"value": value, "description": OUTFIT_VALUE_DESCRIPTIONS.get(key, {}).get(value, value)}
+            for value in sorted(values)
+        ]
+        for key, values in ALLOWED_OUTFIT_VALUES.items()
+    },
     ensure_ascii=False,
 )
 logger = logging.getLogger("uvicorn.error")
@@ -42,13 +56,19 @@ LOG_TEXT_LIMIT = 12000
 
 SEMANTIC_FEATURE_GUIDE = """
 中文描述到 Adventurer 部件的近似映射：
+- 先把输入拆成可见特征：发型长度/刘海/蓬松度/卷直/露额/配饰、发色、眼神、眉毛情绪、嘴巴表情、肤色、脸部细节、眼镜、耳饰。再从上面的候选 description 中选最接近的 value。
+- hair 只表示发型轮廓，不表示颜色；黑色、金色、棕色、灰色等必须放到 hairColor。
+- 如果用户描述“黑色厚短发，侧分斜刘海”，应选 hair=short01 或最接近的侧分厚短发，同时 hairColor=#0e0e0e。
 - skinColor: 黑皮/深色皮肤=#763900；小麦/健康肤色=#ecad80；棕色皮肤=#9e5622；白净/默认=#f2d3b1。
 - hairColor: 黑发=#0e0e0e；金发=#e5d7a3 或 #b9a05f；棕发=#6a4e35 或 #796a45；灰发=#afafaf；彩色发按绿色/粉色/紫色/红橙色选择相近色。
-- hair: 短发/清爽/帅小伙优先 short01-short19；长发优先 long01-long26；酷炫/潮流可选 short14、short16、short18、short19、long15、long22。
-- glasses: 不戴眼镜=none；眼镜/小眼镜优先 variant01 或 variant02；酷/墨镜感优先 variant04 或 variant05。
-- mouth: 微笑/温和选低调嘴型；大笑/开心/开朗选更夸张的 variant；严肃/冷酷选闭嘴或平直感 variant。
-- details: 胡子=mustache；雀斑=freckles；腮红=blush；胎记=birthmark；没有明确描述用 none。
-- eyes/eyebrows: 温和选柔和 variant；酷/锐利选更有角度的 variant；缺失时用默认值。
+- hair: 短发/清爽/帅小伙优先 short01-short19；长发优先 long01-long26；侧分斜刘海优先 short01/short10/long01/long05/long09/long25；齐刘海优先 long07/long08/long11/long15/long21；卷发优先 short03/short08/short17/long06/long22/long24；马尾/丸子/辫子优先 long10-long19、long23；刺发/朋克优先 short15/short16/short18。
+- eyes: 先匹配眼睛开闭、眼珠方向和特殊符号；闭眼笑优先 variant19/variant20，眨眼优先 variant21/variant22，星星眼优先 variant23，对眼优先 variant24，侧目优先 variant02/variant03/variant25/variant26，困倦半闭优先 variant04/variant15/variant16/variant17/variant18。
+- eyebrows: 严肃/生气/锐利优先 variant01/variant02；担心/委屈优先 variant03/variant07；自然浓眉优先 variant04/variant08；细弯温柔优先 variant06/variant09/variant11/variant12。
+- mouth: 默认平静优先 variant09；微笑优先 variant02/variant22/variant23/variant30；大笑优先 variant01/variant05/variant25/variant26/variant27/variant28；惊讶张嘴优先 variant03/variant07/variant15/variant18；吐舌优先 variant12/variant13/variant16/variant24；嘟嘴/亲吻优先 variant10/variant17/variant20/variant21。
+- details: 胡子=mustache；雀斑=freckles；大块腮红=blush；单颗痣/胎记=birthmark；没有明确描述用 none。
+- glasses: 不戴眼镜=none；墨镜/太阳镜=variant01；圆框眼镜按大小和粗细选 variant02/variant03/variant04/variant05。
+- earrings: 不戴耳饰=none；小圆环=variant01；白色圆形耳环=variant02；多个耳钉=variant03/variant04；耳骨夹/上方交叉饰=variant05；单颗黑耳钉=variant06。
+- 不要因为编号靠前就选默认值；必须用 description 的语义相似度做选择。无法判断时才使用默认。
 名人描述只当作泛化风格线索，不要输出或声称真实相似度。
 """
 
@@ -85,11 +105,14 @@ All features must be present. Use defaults when the conversation does not specif
 
 OUTFIT_SEMANTIC_GUIDE = """
 中文描述到 Messenger 3D 换装资产的近似映射：
-- hair: 短发/利落/默认优先 hair1-hair3；蓬松/活泼可选 hair4-hair5；更个性/夸张/潮流可选 hair6-hair7。
-- top: T 恤/基础上衣优先 top1-top3；外套/夹克/运动感优先 top4-top6；正式/层次/更醒目优先 top7-top9。
-- bottom: 短裤/休闲优先 bottom1-bottom2；长裤/牛仔/通勤优先 bottom3-bottom5；宽松/运动/户外优先 bottom6-bottom7。
-- shoes: 普通鞋/休闲鞋优先 shoes1-shoes3；靴子/厚底/运动感优先 shoes4-shoes6；更醒目或不确定时可选 shoes7。
-资产标签只有粗粒度语义。不要声称精确复刻照片服装，只选择最接近的 3D 资产组合。
+- 先把输入拆成可见资产特征：发色和发型轮廓、上衣颜色/长短/装饰、下装颜色/裙裤轮廓、鞋子颜色/鞋口高低。再从上面的候选 description 中选最接近的 value。
+- 这些 Messenger 3D 资产颜色是固定材质色；用户明确描述颜色时，优先匹配 description 中的颜色，不要把黑鞋映射成浅色鞋、把裙装映射成普通裤装。
+- hair: 按 description 同时匹配颜色和轮廓。黑色厚短发优先 hair1；棕色圆润短发优先 hair2；金棕/浅棕侧分短发优先 hair3；黑蓝蓬松短发优先 hair4；暗紫层次短发优先 hair5；深绿上翘短发优先 hair6；橙红醒目短发优先 hair7。
+- top: 按上衣颜色优先匹配。米白长袖/针织纹理/斜挎带装饰优先 top1；绿色=top2；砖红=top3；蓝色=top4；黑色=top5；黄棕/卡其黄=top6；灰紫=top7；亮黄=top8；酒红/紫红=top9。
+- bottom: 字段表示下装，不一定是裤子。蓝绿色中长裙/半身裙优先 bottom1；卡其棕=bottom2；深蓝=bottom3；深灰绿=bottom4；棕灰=bottom5；深绿=bottom6；暗紫=bottom7。
+- shoes: 按鞋子颜色优先匹配。黑色高鞋口/短靴感优先 shoes1；米白/浅色=shoes2；棕色=shoes3；深灰=shoes4；红棕=shoes5；深蓝=shoes6；暖红/橙红=shoes7。
+- 不要因为编号靠前就选默认值；必须用 description 的语义相似度做选择。无法判断时才使用默认。
+资产标签只有粗粒度语义。不要声称精确复刻照片服装，只选择最接近的 3D 资产颜色与轮廓组合。
 名人或真实人物描述只当作泛化风格线索，不要输出或声称真实相似度。
 """
 

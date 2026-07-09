@@ -692,13 +692,15 @@ input {
 
 .feature-row {
   display: grid;
-  grid-template-columns: 112px 22px 1fr;
+  grid-template-columns: 72px 18px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .feature-row select {
   grid-column: 2 / 4;
+  width: 100%;
+  min-width: 0;
 }
 
 .feature-row .color-swatch + select {
@@ -706,8 +708,8 @@ input {
 }
 
 .color-swatch {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border: 1px solid #b7c0ba;
   border-radius: 999px;
 }
@@ -728,7 +730,7 @@ input {
 }
 
 .outfit-feature-row {
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
 }
 
 .outfit-feature-row select {

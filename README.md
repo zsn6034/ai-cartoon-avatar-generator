@@ -1,12 +1,12 @@
 # AI 卡通头像生成器
 
-一个前后端分离的头像与换装生成 MVP：上传图片或通过多轮自由对话描述外貌 / 穿搭，由后端按前端传入的 LLM 配置调用 OpenAI-compatible 模型，分别生成 DiceBear Adventurer 原生头像参数或 Messenger 风格 3D 换装资产选择。前端支持 2D SVG 头像组合渲染、3D 骨骼角色预览、手动微调和本地历史记录。
+一个前后端分离的头像与换装生成应用：上传图片或通过多轮自由对话描述外貌 / 穿搭，由后端按前端传入的 LLM 配置调用 OpenAI-compatible 模型，分别生成 DiceBear Adventurer 原生头像参数或 Messenger 风格 3D 换装资产选择。前端支持 2D SVG 头像组合渲染、3D 骨骼角色预览、手动微调和本地历史记录。
 
 ## 核心功能
 
 - **DiceBear Adventurer SVG 头像**：前端使用基于本地 `frontend/src/avatar/adventurer.min.json` 的 Adventurer 部件组合渲染。
 - **Adventurer 原生参数**：头像状态直接使用 `hair`、`eyes`、`eyebrows`、`mouth`、`hairColor`、`skinColor`、`details`、`glasses`、`earrings`
-- **Messenger 3D 换装**：访问 `/3d-outfit-change`，通过上传图片或自由对话把输入映射为 `hair`、`top`、`bottom`、`shoes` 四类 3D 资产。
+- **Messenger 3D 换装**：在根页面点击“3D 换装”切换工作区，通过上传图片或自由对话把输入映射为 `hair`、`top`、`bottom`、`shoes` 四类 3D 资产。
 - **Three.js 3D 预览**：前端从 `frontend/public/messenger-avatar/` 本地加载 Messenger `.drc` 资产，使用自定义 Draco 解码、SkinnedMesh、骨骼和动画剪辑渲染角色。
 - **动作预览**：3D 页面支持 `idle`、`run`、`sprint`、`air`、`afk1`、`afk2`、`afk3` 动作选择，动作只影响预览并保存到 3D 历史记录。
 - **多轮自由对话**：用户可以连续补充描述。发送消息只更新本轮会话记忆，不会自动更新头像预览。
@@ -69,7 +69,7 @@ pnpm install
 pnpm --filter ai-cartoon-avatar-generator dev
 ```
 
-打开 `http://localhost:5173` 使用 2D 头像生成。打开 `http://localhost:5173/3d-outfit-change` 使用 3D 换装。Vite 已配置 `/api` 代理到 `http://localhost:8000`。
+打开 `http://localhost:5173` 使用 2D 头像生成，并通过页头的“3D 换装 / 2D 头像”按钮在同一个根路由内切换工作区。Vite 已配置 `/api` 代理到 `http://localhost:8000`。
 
 ## 免费 Demo 部署
 
@@ -168,7 +168,7 @@ Cloudflare Pages 连接同一个仓库，配置：
 
 ## 3D 换装流程
 
-1. 用户进入 `/3d-outfit-change`，选择上传图片或自由对话。
+1. 用户在根页面点击“3D 换装”切换工作区，选择上传图片或自由对话。
 2. 图片模式调用 `/api/outfit/analyze/image`，对话模式先通过 `/api/outfit/chat/remember` 累积描述，再点击生成调用 `/api/outfit/chat/generate`。
 3. 后端把输入映射为 Messenger 3D 资产字段：`hair`、`top`、`bottom`、`shoes`。
 4. 前端从 `frontend/public/messenger-avatar/geometries/avatar/accessories/` 加载 `base.drc` 与选中的服装部件。

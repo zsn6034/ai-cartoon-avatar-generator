@@ -72,7 +72,13 @@ function getLLMConfigError(config: LLMConfig) {
   return undefined;
 }
 
-function AvatarPage() {
+type WorkspaceKind = "avatar" | "outfit";
+
+type AvatarPageProps = {
+  onOpenOutfit: () => void;
+};
+
+function AvatarPage({ onOpenOutfit }: AvatarPageProps) {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => readStoredLLMConfig() ?? createConfigFromPreset("qwen", defaultProviders));
   const [providers, setProviders] = useState<ProviderPreset[]>(defaultProviders);
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
@@ -342,9 +348,9 @@ function AvatarPage() {
           <p>从照片或自由描述生成 DiceBear Adventurer 风格的 SVG 部件头像。</p>
         </div>
         <div className="header-controls">
-          <a className="page-nav-link" href="/3d-outfit-change" title="打开 3D 换装">
+          <button className="page-nav-link" type="button" onClick={onOpenOutfit} title="打开 3D 换装">
             3D 换装
-          </a>
+          </button>
           <button className="workspace-reset" type="button" onClick={handleWorkspaceReset} title="重置当前工作区">
             <RotateCcw size={17} />
             重置
@@ -384,5 +390,17 @@ function AvatarPage() {
 }
 
 export default function App() {
-  return window.location.pathname === "/3d-outfit-change" ? <OutfitChangePage /> : <AvatarPage />;
+  const [workspace, setWorkspace] = useState<WorkspaceKind>("avatar");
+
+  useEffect(() => {
+    if (window.location.pathname !== "/") {
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
+
+  return workspace === "outfit" ? (
+    <OutfitChangePage onOpenAvatar={() => setWorkspace("avatar")} />
+  ) : (
+    <AvatarPage onOpenOutfit={() => setWorkspace("outfit")} />
+  );
 }
