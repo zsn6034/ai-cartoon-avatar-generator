@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { analyzeImage, generateFromChat, getProviders, rememberChat } from "./api/faceAnalysis";
@@ -330,9 +332,15 @@ export default function App() {
     }
   }, []);
 
-  return workspace === "outfit" ? (
-    <OutfitChangePage onOpenAvatar={() => setWorkspace("avatar")} />
-  ) : (
-    <AvatarPage onOpenOutfit={() => setWorkspace("outfit")} />
+  return (
+    <>
+      {workspace === "outfit" ? (
+        <OutfitChangePage onOpenAvatar={() => setWorkspace("avatar")} />
+      ) : (
+        <AvatarPage onOpenOutfit={() => setWorkspace("outfit")} />
+      )}
+      <Analytics />
+      <SpeedInsights />
+    </>
   );
 }
