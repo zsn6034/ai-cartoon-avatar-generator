@@ -1,18 +1,40 @@
 export type InputMode = "image" | "chat";
+export type ProviderId = "qwen" | "doubao" | "openai" | "custom";
+export type ProviderCapability = "chat_completions" | "vision";
 
 export interface LLMConfig {
-  provider: string;
+  provider: ProviderId;
+  providerName?: string;
   model: string;
   apiKey: string;
   baseUrl: string;
 }
 
 export type ProviderPreset = {
-  id: string;
+  id: ProviderId;
   label: string;
   model: string;
   baseUrl: string;
   configured: boolean;
+  capabilities?: ProviderCapability[];
+  requiresApiKey?: boolean;
+  supportsCustomBaseUrl?: boolean;
+};
+
+export type ProviderPresetResponse = {
+  id: ProviderId;
+  label: string;
+  model: string;
+  base_url: string;
+  configured: boolean;
+  capabilities?: ProviderCapability[];
+  requires_api_key?: boolean;
+  supports_custom_base_url?: boolean;
+};
+
+export type ProviderListResponse = {
+  default_provider: ProviderId;
+  providers: ProviderPresetResponse[];
 };
 
 export const hairValues = [

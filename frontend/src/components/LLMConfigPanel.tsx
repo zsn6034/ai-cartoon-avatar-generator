@@ -1,6 +1,6 @@
 import { Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { LLMConfig, ProviderPreset } from "../types/face";
+import type { LLMConfig, ProviderId, ProviderPreset } from "../types/face";
 
 type Props = {
   config: LLMConfig;
@@ -11,8 +11,10 @@ type Props = {
 };
 
 function normalizeConfig(config: LLMConfig): LLMConfig {
+  const providerName = config.providerName?.trim();
   return {
-    provider: config.provider.trim(),
+    provider: config.provider,
+    providerName: providerName || undefined,
     model: config.model.trim(),
     apiKey: config.apiKey.trim(),
     baseUrl: config.baseUrl.trim().replace(/\/+$/, "")
@@ -31,15 +33,16 @@ export function LLMConfigPanel({ config, open, presets, onClose, onSave }: Props
   const selectedPreset = presets.find((preset) => preset.id === draft.provider);
   const selectedId = selectedPreset ? selectedPreset.id : "custom";
 
-  function applyPreset(providerId: string) {
+  function applyPreset(providerId: ProviderId) {
     const preset = presets.find((item) => item.id === providerId);
     if (!preset || providerId === "custom") {
-      setDraft((current) => ({ ...current, provider: providerId === "custom" ? "" : providerId }));
+      setDraft((current) => ({ ...current, provider: "custom", model: preset?.model ?? "", baseUrl: preset?.baseUrl ?? "" }));
       return;
     }
     setDraft((current) => ({
       ...current,
       provider: preset.id,
+      providerName: undefined,
       model: preset.model,
       baseUrl: preset.baseUrl
     }));
@@ -65,7 +68,7 @@ export function LLMConfigPanel({ config, open, presets, onClose, onSave }: Props
         <div className="config-grid">
           <label>
             <span>Provider</span>
-            <select value={selectedId} onChange={(event) => applyPreset(event.target.value)}>
+            <select value={selectedId} onChange={(event) => applyPreset(event.target.value as ProviderId)}>
               {presets.map((preset) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.label}
@@ -77,7 +80,7 @@ export function LLMConfigPanel({ config, open, presets, onClose, onSave }: Props
           {selectedId === "custom" && (
             <label>
               <span>自定义 Provider</span>
-              <input value={draft.provider} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} placeholder="例如 siliconflow" />
+              <input value={draft.providerName ?? ""} onChange={(event) => setDraft((current) => ({ ...current, providerName: event.target.value }))} placeholder="例如 siliconflow" />
             </label>
           )}
 

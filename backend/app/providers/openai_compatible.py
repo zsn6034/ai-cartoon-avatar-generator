@@ -1,5 +1,5 @@
-from app.providers.base import BaseProvider
+from app.providers.chat_completions import ChatCompletionsAdapter
 
 
-class OpenAICompatibleProvider(BaseProvider):
+class OpenAICompatibleProvider(ChatCompletionsAdapter):
     name = "openai-compatible"

@@ -8,6 +8,7 @@ import { OutfitFeatureEditor } from "../components/outfit/OutfitFeatureEditor";
 import { OutfitGenerationHistory } from "../components/outfit/OutfitGenerationHistory";
 import { OutfitPreviewPanel } from "../components/outfit/OutfitPreviewPanel";
 import { OutfitReasonPanel } from "../components/outfit/OutfitReasonPanel";
+import { formatLLMConfigSummary, getLLMConfigError, useLLMConfig } from "../llmConfig";
 import { defaultOutfitChatMemory, defaultOutfitFeatures } from "../outfitRegistry/schema";
 import { addOutfitGenerationRecord, deleteOutfitGenerationRecord, listOutfitGenerationRecords } from "../storage/outfitDraftDb";
 import type {
@@ -20,76 +21,18 @@ import type {
   OutfitGenerationRecord,
   OutfitSelection
 } from "../types/outfit";
-import type { ProviderPreset } from "../types/face";
-
-const LLM_CONFIG_STORAGE_KEY = "ai-cartoon-avatar.llm-config";
 const defaultAction: OutfitAction = "idle";
 
 type Props = {
   onOpenAvatar: () => void;
 };
 
-const defaultProviders: ProviderPreset[] = [
-  { id: "qwen", label: "Qwen", model: "qwen-vl-plus", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", configured: false },
-  { id: "doubao", label: "Doubao", model: "doubao-1-5-vision-pro-32k-250115", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", configured: false },
-  { id: "openai", label: "OpenAI", model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1", configured: false },
-  { id: "custom", label: "Custom", model: "", baseUrl: "", configured: false }
-];
-
 function sortOutfitGenerationRecords(records: OutfitGenerationRecord[]) {
   return [...records].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
-function createConfigFromPreset(providerId: string, presets: ProviderPreset[]): LLMConfig {
-  const preset = presets.find((item) => item.id === providerId) ?? presets[0];
-  return {
-    provider: preset?.id ?? "qwen",
-    model: preset?.model ?? "qwen-vl-plus",
-    apiKey: "",
-    baseUrl: preset?.baseUrl ?? "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  };
-}
-
-function readStoredLLMConfig(): LLMConfig | undefined {
-  try {
-    const raw = localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as Partial<LLMConfig>;
-    if (
-      typeof parsed.provider !== "string" ||
-      typeof parsed.model !== "string" ||
-      typeof parsed.apiKey !== "string" ||
-      typeof parsed.baseUrl !== "string"
-    ) {
-      return undefined;
-    }
-    return {
-      provider: parsed.provider,
-      model: parsed.model,
-      apiKey: parsed.apiKey,
-      baseUrl: parsed.baseUrl
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function persistLLMConfig(config: LLMConfig) {
-  localStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify(config));
-}
-
-function getLLMConfigError(config: LLMConfig) {
-  if (!config.provider.trim()) return "请先配置 Provider";
-  if (!config.model.trim()) return "请先配置 Model";
-  if (!config.apiKey.trim()) return "请先配置 API Key";
-  if (!config.baseUrl.trim()) return "请先配置 Base URL";
-  return undefined;
-}
-
 export function OutfitChangePage({ onOpenAvatar }: Props) {
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => readStoredLLMConfig() ?? createConfigFromPreset("qwen", defaultProviders));
-  const [providers, setProviders] = useState<ProviderPreset[]>(defaultProviders);
-  const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const { llmConfig, providers, configPanelOpen, setConfigPanelOpen, applyProviderResponse, saveLLMConfig } = useLLMConfig();
   const [mode, setMode] = useState<InputMode>("image");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -112,14 +55,7 @@ export function OutfitChangePage({ onOpenAvatar }: Props) {
       if (cancelled) return;
 
       if (providerResult.status === "fulfilled") {
-        const nextProviders = providerResult.value.providers.map((provider) => ({
-          ...provider,
-          baseUrl: provider.base_url ?? ""
-        }));
-        setProviders(nextProviders);
-        if (!readStoredLLMConfig()) {
-          setLlmConfig(createConfigFromPreset(providerResult.value.default_provider, nextProviders));
-        }
+        applyProviderResponse(providerResult.value);
       }
 
       if (recordsResult.status === "fulfilled") {
@@ -127,10 +63,7 @@ export function OutfitChangePage({ onOpenAvatar }: Props) {
       }
     }
 
-    initialize().catch(() => {
-      if (cancelled) return;
-      setProviders(defaultProviders);
-    });
+    initialize().catch(() => undefined);
 
     return () => {
       cancelled = true;
@@ -344,14 +277,12 @@ export function OutfitChangePage({ onOpenAvatar }: Props) {
   }
 
   function handleLLMConfigSave(config: LLMConfig) {
-    setLlmConfig(config);
-    persistLLMConfig(config);
-    setConfigPanelOpen(false);
+    saveLLMConfig(config);
     setError(undefined);
   }
 
   const previewLoadingLabel = mode === "image" ? "分析图片并匹配 3D 资产中..." : "生成 3D 搭配中...";
-  const configSummary = `${llmConfig.provider || "未配置"} · ${llmConfig.model || "未配置模型"}`;
+  const configSummary = formatLLMConfigSummary(llmConfig);
 
   return (
     <main className="app-shell outfit-shell">

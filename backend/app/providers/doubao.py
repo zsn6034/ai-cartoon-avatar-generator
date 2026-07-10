@@ -1,5 +1,5 @@
-from app.providers.base import BaseProvider
+from app.providers.chat_completions import ChatCompletionsAdapter
 
 
-class DoubaoProvider(BaseProvider):
+class DoubaoProvider(ChatCompletionsAdapter):
     name = "doubao"

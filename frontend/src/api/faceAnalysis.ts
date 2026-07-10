@@ -1,4 +1,4 @@
-import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, LLMConfig } from "../types/face";
+import type { AnalysisResponse, ChatMemory, ChatMessage, ChatRememberResponse, LLMConfig, ProviderListResponse } from "../types/face";
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -9,15 +9,13 @@ function apiUrl(path: string) {
 export async function getProviders() {
   const response = await fetch(apiUrl("/api/providers"));
   if (!response.ok) throw new Error("无法获取 Provider 列表");
-  return response.json() as Promise<{
-    default_provider: string;
-    providers: Array<{ id: string; label: string; model: string; base_url: string; configured: boolean }>;
-  }>;
+  return response.json() as Promise<ProviderListResponse>;
 }
 
 function toServerConfig(config: LLMConfig) {
   return {
     provider: config.provider,
+    provider_name: config.providerName,
     model: config.model,
     api_key: config.apiKey,
     base_url: config.baseUrl

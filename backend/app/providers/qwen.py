@@ -1,5 +1,5 @@
-from app.providers.base import BaseProvider
+from app.providers.chat_completions import ChatCompletionsAdapter
 
 
-class QwenProvider(BaseProvider):
+class QwenProvider(ChatCompletionsAdapter):
     name = "qwen"

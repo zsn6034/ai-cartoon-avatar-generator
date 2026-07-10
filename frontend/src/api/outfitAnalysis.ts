@@ -9,6 +9,7 @@ function apiUrl(path: string) {
 function toServerConfig(config: LLMConfig) {
   return {
     provider: config.provider,
+    provider_name: config.providerName,
     model: config.model,
     api_key: config.apiKey,
     base_url: config.baseUrl

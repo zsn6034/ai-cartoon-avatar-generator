@@ -1,6 +1,8 @@
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.providers.registry import ProviderId, normalize_provider_id
 
 
 HairVariant = Literal[
@@ -450,10 +452,24 @@ class ChatMessage(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    provider: str = Field(min_length=1)
+    provider: ProviderId
     model: str = Field(min_length=1)
     api_key: str = Field(min_length=1)
     base_url: str = Field(min_length=1)
+    provider_name: Optional[str] = None
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def validate_provider(cls, value):
+        return normalize_provider_id(value)
+
+    @field_validator("provider_name")
+    @classmethod
+    def normalize_provider_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class ChatRememberRequest(BaseModel):
