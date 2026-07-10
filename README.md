@@ -71,27 +71,28 @@ pnpm --filter ai-cartoon-avatar-generator dev
 
 打开 `http://localhost:5173` 使用 2D 头像生成，并通过页头的“3D 换装 / 2D 头像”按钮在同一个根路由内切换工作区。Vite 已配置 `/api` 代理到 `http://localhost:8000`。
 
-## 免费 Demo 部署
+## Vercel 单 Project 部署
 
-推荐用 Cloudflare Pages 部署前端，用 Vercel Python Runtime 部署 FastAPI 后端。这个组合不依赖 Render 绑卡，也比 Hugging Face Spaces 更贴近普通 Web 后端部署。
+项目现在使用根目录的 `vercel.json` 通过 Vercel Services 在同一个 Vercel Project 内部署前端和后端：
 
-### 1. 部署后端到 Vercel
+- `frontend` service：React + Vite，构建输出 `frontend/dist`
+- `backend` service：FastAPI，入口 `backend/api/index.py`
+- 根级 rewrite：`/api/*` 进入后端，其余路径进入前端
 
-`backend/api/index.py` 导出 FastAPI app，`backend/vercel.json` 会把 `/api/*` 请求明确路由到这个 Python 函数，避免 Vercel 部署后 `/api/health` 变成平台 404。依赖通过 `backend/requirements.txt` 安装。
+前端生产环境不需要再配置 `VITE_API_BASE_URL`。该变量留空时，浏览器会直接请求同域名下的 `/api/...`，避免跨域配置。
 
 在 Vercel 新建 Project，连接本仓库后配置：
 
-- Root Directory: `backend`
+- Root Directory: 留空，使用仓库根目录
 - Framework Preset: `Other`
-- Build Command: 留空
-- Output Directory: 留空
-- Install Command: `pip install -r requirements.txt`
+- Build Command: 留空，使用 `vercel.json` 中各 service 的配置
+- Output Directory: 留空，使用 `vercel.json` 中各 service 的配置
 
 Vercel 环境变量：
 
 ```env
 DEFAULT_PROVIDER=qwen
-FRONTEND_ORIGIN=https://your-vercel-web.vercel.app
+FRONTEND_ORIGIN=https://your-app.vercel.app
 FRONTEND_ORIGIN_REGEX=https://.*\.vercel\.app
 QWEN_API_KEY=
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
@@ -101,37 +102,26 @@ DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 DOUBAO_MODEL=doubao-1-5-vision-pro-32k-250115
 ```
 
-如果还没拿到前端域名，可以先填 `http://localhost:5173`，等前端发布后再改成正式域名。多个来源可以用逗号分隔。`FRONTEND_ORIGIN_REGEX` 默认放行 `.vercel.app` 域名，demo 阶段可保留；正式发布时建议改成空值，并只保留精确的 `FRONTEND_ORIGIN`。
+同域部署时浏览器不会产生跨域请求，`FRONTEND_ORIGIN` 主要用于保留后端被其他 origin 调用时的 CORS 白名单。demo 阶段可保留 `FRONTEND_ORIGIN_REGEX=https://.*\.vercel\.app` 以支持 Vercel Preview 域名；正式发布时建议改成空值，并只保留精确的 `FRONTEND_ORIGIN`。
 
-部署成功后，后端地址通常类似：
+部署成功后，应用地址通常类似：
 
 ```text
-https://your-vercel-api.vercel.app
+https://your-app.vercel.app
 ```
 
 检查：
 
 ```text
-https://your-vercel-api.vercel.app/api/health
+https://your-app.vercel.app/api/health
 ```
 
-### 2. 部署前端到 Cloudflare Pages
+### 发布后检查
 
-Cloudflare Pages 连接同一个仓库，配置：
-
-- Root directory: `frontend`
-- Build command: `pnpm install --frozen-lockfile && pnpm build`
-- Build output directory: `dist`
-- Environment variable: `VITE_API_BASE_URL=https://your-vercel-api.vercel.app`
-
-`VITE_API_BASE_URL` 填 Vercel 后端地址，不要以 `/api` 结尾。
-
-### 3. 发布后检查
-
-1. 打开 `https://your-vercel-api.vercel.app/api/health`，应返回 `{"status":"ok"}`。
-2. 打开 Cloudflare Pages 前端域名。
+1. 打开 `https://your-app.vercel.app/api/health`，应返回 `{"status":"ok"}`。
+2. 打开 Vercel 应用首页。
 3. 在前端 LLM 配置里填 provider、model、baseUrl 和 API Key。
-4. 测试自由对话和“生成头像”。如果浏览器报 CORS，检查 Vercel 的 `FRONTEND_ORIGIN` 是否等于前端完整 origin，例如 `https://your-site.pages.dev`。
+4. 测试自由对话和“生成头像”。如果浏览器报 CORS，检查 Vercel 的 `FRONTEND_ORIGIN` 是否等于应用完整 origin，例如 `https://your-app.vercel.app`。
 
 ## API
 
